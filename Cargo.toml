@@ -1,0 +1,10 @@
+[package]
+name = "rinterval"
+version = "0.1.0"
+edition = "2024"
+description = "Interval arithmetic for modeling the behavior of Rust std functions"
+
+[dependencies]
+
+[profile.test]
+opt-level = 1
