@@ -405,6 +405,13 @@ fn test_div_ceil() {
 }
 
 #[test]
+fn test_midpoint() {
+    let op = binary!(Arithmetic::midpoint);
+    test_binary_all!(op, |lhs, rhs| Some(lhs.midpoint(rhs)));
+    op.snapshot();
+}
+
+#[test]
 fn test_strict_rem() {
     let op = binary!(Arithmetic::strict_rem);
     test_binary_all!(op, |lhs, rhs| lhs.checked_rem(rhs));

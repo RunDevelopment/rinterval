@@ -880,6 +880,33 @@ impl Arithmetic {
         }
     }
 
+    /// Midpoint.
+    pub fn midpoint(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
+        let ty = check_same_ty(lhs, rhs)?;
+        check_non_empty!(lhs, rhs);
+
+        match ty.info() {
+            IntTypeInfo::Signed(_, _) => {
+                let (l_min, l_max) = lhs.as_signed();
+                let (r_min, r_max) = rhs.as_signed();
+
+                let min = l_min.midpoint(r_min);
+                let max = l_max.midpoint(r_max);
+
+                Ok(IInterval::new_signed(ty, min, max))
+            }
+            IntTypeInfo::Unsigned(_) => {
+                let (l_min, l_max) = lhs.as_unsigned();
+                let (r_min, r_max) = rhs.as_unsigned();
+
+                let min = l_min.midpoint(r_min);
+                let max = l_max.midpoint(r_max);
+
+                Ok(IInterval::new_unsigned(ty, min, max))
+            }
+        }
+    }
+
     /// Remainder which panics on overflow and rhs == 0.
     pub fn strict_rem(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
