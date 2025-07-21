@@ -110,6 +110,11 @@ macro_rules! test_binary_signed {
         test_binary(VALUES_I32, VALUES_I32, $f, ($op).range_op);
         test_binary(VALUES_I128, VALUES_I128, $f, ($op).range_op);
     };
+    ($op:expr, $f:expr, rhs = $r:ident) => {
+        test_binary(VALUES_I8, $r, $f, ($op).range_op);
+        test_binary(VALUES_I32, $r, $f, ($op).range_op);
+        test_binary(VALUES_I128, $r, $f, ($op).range_op);
+    };
 }
 macro_rules! test_binary_unsigned {
     ($op:expr, $f:expr) => {
@@ -117,11 +122,20 @@ macro_rules! test_binary_unsigned {
         test_binary(VALUES_U32, VALUES_U32, $f, ($op).range_op);
         test_binary(VALUES_U128, VALUES_U128, $f, ($op).range_op);
     };
+    ($op:expr, $f:expr, rhs = $r:ident) => {
+        test_binary(VALUES_U8, $r, $f, ($op).range_op);
+        test_binary(VALUES_U32, $r, $f, ($op).range_op);
+        test_binary(VALUES_U128, $r, $f, ($op).range_op);
+    };
 }
 macro_rules! test_binary_all {
     ($op:expr, $f:expr) => {
         test_binary_signed!($op, $f);
         test_binary_unsigned!($op, $f);
+    };
+    ($op:expr, $f:expr, rhs = $r:ident) => {
+        test_binary_signed!($op, $f, rhs = $r);
+        test_binary_unsigned!($op, $f, rhs = $r);
     };
 }
 
@@ -222,6 +236,19 @@ impl BinaryOp {
         }
         if self.support_unsigned {
             data.push((SNAPSHOT_RANGES_U8, SNAPSHOT_RANGES_U8));
+            data.push((SNAPSHOT_RANGES_U32, SNAPSHOT_RANGES_U32));
+        }
+
+        self.snapshot_with(&data);
+    }
+    fn snapshot_rhs_u32(&self) {
+        let mut data = Vec::new();
+        if self.support_signed {
+            data.push((SNAPSHOT_RANGES_I8, SNAPSHOT_RANGES_U32));
+            data.push((SNAPSHOT_RANGES_I32, SNAPSHOT_RANGES_U32));
+        }
+        if self.support_unsigned {
+            data.push((SNAPSHOT_RANGES_U8, SNAPSHOT_RANGES_U32));
             data.push((SNAPSHOT_RANGES_U32, SNAPSHOT_RANGES_U32));
         }
 
@@ -438,6 +465,52 @@ fn test_not() {
     let op = unary!(Arithmetic::not);
     test_unary_all!(op, |x| Some(!x));
     op.snapshot();
+}
+
+#[test]
+fn test_strict_shl() {
+    let op = binary!(Arithmetic::strict_shl);
+    test_binary_all!(op, |lhs, rhs| lhs.checked_shl(rhs), rhs = VALUES_U32);
+    op.snapshot_rhs_u32();
+}
+#[test]
+fn test_wrapping_shl() {
+    let op = binary!(Arithmetic::wrapping_shl);
+    test_binary_all!(op, |lhs, rhs| Some(lhs.wrapping_shl(rhs)), rhs = VALUES_U32);
+    op.snapshot_rhs_u32();
+}
+#[test]
+fn test_unbounded_shl() {
+    let op = binary!(Arithmetic::unbounded_shl);
+    test_binary_all!(
+        op,
+        |lhs, rhs| Some(lhs.unbounded_shl(rhs)),
+        rhs = VALUES_U32
+    );
+    op.snapshot_rhs_u32();
+}
+
+#[test]
+fn test_strict_shr() {
+    let op = binary!(Arithmetic::strict_shr);
+    test_binary_all!(op, |lhs, rhs| lhs.checked_shr(rhs), rhs = VALUES_U32);
+    op.snapshot_rhs_u32();
+}
+#[test]
+fn test_wrapping_shr() {
+    let op = binary!(Arithmetic::wrapping_shr);
+    test_binary_all!(op, |lhs, rhs| Some(lhs.wrapping_shr(rhs)), rhs = VALUES_U32);
+    op.snapshot_rhs_u32();
+}
+#[test]
+fn test_unbounded_shr() {
+    let op = binary!(Arithmetic::unbounded_shr);
+    test_binary_all!(
+        op,
+        |lhs, rhs| Some(lhs.unbounded_shr(rhs)),
+        rhs = VALUES_U32
+    );
+    op.snapshot_rhs_u32();
 }
 
 #[test]

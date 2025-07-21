@@ -51,6 +51,13 @@ impl Bits {
             IInterval::new_unsigned(u_ty, self.zero & u_max, self.one & u_max)
                 .cast_unsigned_to_signed()
         } else {
+            #[cfg(debug_assertions)]
+            {
+                let u_max = ty.max_value().cast_unsigned();
+                debug_assert!(self.zero <= u_max);
+                debug_assert!(self.one <= u_max);
+            }
+
             IInterval::new_unsigned(ty, self.zero, self.one)
         }
     }

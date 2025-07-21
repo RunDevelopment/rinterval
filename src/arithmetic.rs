@@ -141,6 +141,13 @@ impl Arithmetic {
             Self::wrapping_abs(value)
         }
     }
+    pub fn shl(&self, value: &IInterval, shift: &IInterval) -> ArithResult {
+        if self.checked {
+            Self::strict_shl(value, shift)
+        } else {
+            Self::wrapping_shl(value, shift)
+        }
+    }
 
     /// Addition which saturates on overflow.
     pub fn saturating_add(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
@@ -1291,6 +1298,243 @@ impl Arithmetic {
                 Ok(IInterval::new_unsigned(ty, !x_max & t_max, !x_min & t_max))
             }
         }
+    }
+
+    pub fn strict_shl(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
+        if rhs.ty != IntType::U32 {
+            return Err(ArithError::TypeError);
+        }
+
+        check_non_empty!(lhs, rhs);
+
+        let ty = lhs.ty;
+        let bit_width: u32 = ty.bits() as u32;
+
+        let (r_min, r_max) = rhs.as_unsigned();
+        let r_min = r_min as u32;
+        let r_max = (r_max as u32).min(bit_width - 1);
+        if r_min >= bit_width {
+            return Ok(IInterval::empty(ty));
+        }
+
+        let mask = !u128::MAX.unbounded_shl(bit_width);
+
+        let mut bits = Bits::from_non_empty(lhs);
+        bits.zero = (bits.zero << r_min) & mask;
+        bits.one = (bits.one << r_min) & mask;
+
+        let mut result = bits.to_interval(ty);
+        for _ in r_min..r_max {
+            bits.zero = (bits.zero << 1) & mask;
+            bits.one = (bits.one << 1) & mask;
+            result = result.hull(&bits.to_interval(ty));
+        }
+
+        Ok(result)
+    }
+    pub fn wrapping_shl(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
+        if rhs.ty != IntType::U32 {
+            return Err(ArithError::TypeError);
+        }
+
+        check_non_empty!(lhs, rhs);
+
+        let ty = lhs.ty;
+        let bit_width = ty.bits() as u32;
+
+        let (r_min, r_max) = rhs.as_unsigned();
+        let mut r_min = r_min as u32;
+        let mut r_max = r_max as u32;
+
+        if r_max - r_min >= bit_width - 1 {
+            r_min = 0;
+            r_max = bit_width - 1;
+        } else {
+            r_min %= bit_width;
+            r_max %= bit_width;
+        }
+
+        let result = if r_min <= r_max {
+            Self::strict_shl(
+                lhs,
+                &IInterval::new_unsigned(IntType::U32, r_min as u128, r_max as u128),
+            )?
+        } else {
+            let left = Self::strict_shl(
+                lhs,
+                &IInterval::new_unsigned(IntType::U32, 0, r_max as u128),
+            )?;
+            let right = Self::strict_shl(
+                lhs,
+                &IInterval::new_unsigned(IntType::U32, r_min as u128, (bit_width - 1) as u128),
+            )?;
+
+            left.hull(&right)
+        };
+
+        Ok(result)
+    }
+    pub fn unbounded_shl(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
+        if rhs.ty != IntType::U32 {
+            return Err(ArithError::TypeError);
+        }
+
+        check_non_empty!(lhs, rhs);
+
+        let mut result = Self::strict_shl(lhs, rhs)?;
+
+        let ty = lhs.ty;
+
+        let (_, r_max) = rhs.as_unsigned();
+        if r_max as u32 >= ty.bits() as u32 {
+            let zero = if ty.is_signed() {
+                IInterval::single_signed(ty, 0)
+            } else {
+                IInterval::single_unsigned(ty, 0)
+            };
+            result = result.hull(&zero);
+        }
+
+        Ok(result)
+    }
+
+    pub fn strict_shr(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
+        if rhs.ty != IntType::U32 {
+            return Err(ArithError::TypeError);
+        }
+
+        check_non_empty!(lhs, rhs);
+
+        let ty = lhs.ty;
+        let bit_width: u32 = ty.bits() as u32;
+
+        let (r_min, r_max) = rhs.as_unsigned();
+        let r_min = r_min as u32;
+        let r_max = (r_max as u32).min(bit_width - 1);
+        if r_min >= bit_width {
+            return Ok(IInterval::empty(ty));
+        }
+
+        if ty.is_signed() {
+            Ok(split_by_sign_bit(lhs, |min, max| {
+                let bits_interval = IInterval::new_signed(ty, min.cast_signed(), max.cast_signed());
+                let bits = Bits::from_non_empty(&bits_interval);
+
+                let mut zero = bits.zero.cast_signed();
+                let mut one = bits.one.cast_signed();
+
+                zero >>= r_min;
+                one >>= r_min;
+
+                let mut result =
+                    Bits::new(zero.cast_unsigned(), one.cast_unsigned()).to_interval(ty);
+                for _ in r_min..r_max {
+                    if result.min == 0 || result.min == -1 {
+                        break; // no need to shift further, as the result will not change
+                    }
+                    zero >>= 1;
+                    one >>= 1;
+                    result = result.hull(
+                        &Bits::new(zero.cast_unsigned(), one.cast_unsigned()).to_interval(ty),
+                    );
+                }
+
+                result
+            }))
+        } else {
+            let mut bits = Bits::from_non_empty(lhs);
+
+            bits.zero >>= r_min;
+            bits.one >>= r_min;
+
+            let mut result = bits.to_interval(ty);
+
+            for _ in r_min..r_max {
+                if result.min == 0 {
+                    break; // no need to shift further, as the result will not change
+                }
+                bits.zero >>= 1;
+                bits.one >>= 1;
+                result = result.hull(&bits.to_interval(ty));
+            }
+
+            Ok(result)
+        }
+    }
+    pub fn wrapping_shr(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
+        if rhs.ty != IntType::U32 {
+            return Err(ArithError::TypeError);
+        }
+
+        check_non_empty!(lhs, rhs);
+
+        let ty = lhs.ty;
+        let bit_width = ty.bits() as u32;
+
+        let (r_min, r_max) = rhs.as_unsigned();
+        let mut r_min = r_min as u32;
+        let mut r_max = r_max as u32;
+
+        if r_max - r_min >= bit_width - 1 {
+            r_min = 0;
+            r_max = bit_width - 1;
+        } else {
+            r_min %= bit_width;
+            r_max %= bit_width;
+        }
+
+        let result = if r_min <= r_max {
+            Self::strict_shr(
+                lhs,
+                &IInterval::new_unsigned(IntType::U32, r_min as u128, r_max as u128),
+            )?
+        } else {
+            let left = Self::strict_shr(
+                lhs,
+                &IInterval::new_unsigned(IntType::U32, 0, r_max as u128),
+            )?;
+            let right = Self::strict_shr(
+                lhs,
+                &IInterval::new_unsigned(IntType::U32, r_min as u128, (bit_width - 1) as u128),
+            )?;
+
+            left.hull(&right)
+        };
+
+        Ok(result)
+    }
+    pub fn unbounded_shr(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
+        if rhs.ty != IntType::U32 {
+            return Err(ArithError::TypeError);
+        }
+
+        check_non_empty!(lhs, rhs);
+
+        let mut result = Self::strict_shr(lhs, rhs)?;
+
+        let ty = lhs.ty;
+
+        let (_, r_max) = rhs.as_unsigned();
+        if r_max as u32 >= ty.bits() as u32 {
+            let zero = if ty.is_signed() {
+                let has_neg = lhs.min < 0;
+                let has_pos = lhs.max >= 0;
+                if has_neg {
+                    if has_pos {
+                        IInterval::new_signed(ty, -1, 0)
+                    } else {
+                        IInterval::single_signed(ty, -1)
+                    }
+                } else {
+                    IInterval::single_signed(ty, 0)
+                }
+            } else {
+                IInterval::single_unsigned(ty, 0)
+            };
+            result = result.hull(&zero);
+        }
+
+        Ok(result)
     }
 
     pub fn leading_zeros(x: &IInterval) -> ArithResult {
