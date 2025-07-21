@@ -1,4 +1,4 @@
-use crate::{IntBits, IntInterval, IntType, IntTypeInfo};
+use crate::{IInterval, IntType, IntTypeInfo, bits::Bits};
 
 #[derive(Debug)]
 pub enum ArithError {
@@ -6,9 +6,9 @@ pub enum ArithError {
     Unsupported,
 }
 
-pub type ArithResult<T = IntInterval> = Result<T, ArithError>;
+pub type ArithResult<T = IInterval> = Result<T, ArithError>;
 
-fn check_same_ty(lhs: &IntInterval, rhs: &IntInterval) -> ArithResult<IntType> {
+fn check_same_ty(lhs: &IInterval, rhs: &IInterval) -> ArithResult<IntType> {
     if lhs.ty != rhs.ty {
         return Err(ArithError::TypeError);
     }
@@ -18,12 +18,12 @@ fn check_same_ty(lhs: &IntInterval, rhs: &IntInterval) -> ArithResult<IntType> {
 macro_rules! check_non_empty {
     ($x:expr) => {
         if $x.is_empty() {
-            return Ok(IntInterval::empty($x.ty));
+            return Ok(IInterval::empty($x.ty));
         }
     };
     ($lhs:expr, $rhs:expr) => {
         if $lhs.is_empty() || $rhs.is_empty() {
-            return Ok(IntInterval::empty($lhs.ty));
+            return Ok(IInterval::empty($lhs.ty));
         }
     };
 }
@@ -40,9 +40,9 @@ fn min_4(values: &[i128; 4]) -> i128 {
 fn max_4(values: &[i128; 4]) -> i128 {
     values[0].max(values[1]).max(values[2]).max(values[3])
 }
-fn range_4(ty: IntType, values: [i128; 4]) -> IntInterval {
+fn range_4(ty: IntType, values: [i128; 4]) -> IInterval {
     debug_assert!(ty.is_signed());
-    IntInterval::new_signed(ty, min_4(&values), max_4(&values))
+    IInterval::new_signed(ty, min_4(&values), max_4(&values))
 }
 
 /// Splits the interval by the sign bit of its values. The given function will
@@ -50,7 +50,7 @@ fn range_4(ty: IntType, values: [i128; 4]) -> IntInterval {
 ///
 /// E.g. `f` will be called with `(1, 10)` for the interval `[1, 10]` and with
 /// `(0, 5), (u128::MAX-4, u128::MAX)` for the interval `[-5, 5]`.
-fn split_by_sign_bit(i: &IntInterval, mut f: impl FnMut(u128, u128) -> IntInterval) -> IntInterval {
+fn split_by_sign_bit(i: &IInterval, mut f: impl FnMut(u128, u128) -> IInterval) -> IInterval {
     debug_assert!(!i.is_empty());
 
     if i.ty.is_signed() {
@@ -92,49 +92,49 @@ pub struct Arithmetic {
 }
 
 impl Arithmetic {
-    pub fn add(&self, left: &IntInterval, right: &IntInterval) -> ArithResult {
+    pub fn add(&self, left: &IInterval, right: &IInterval) -> ArithResult {
         if self.checked {
             Self::strict_add(left, right)
         } else {
             Self::wrapping_add(left, right)
         }
     }
-    pub fn neg(&self, value: &IntInterval) -> ArithResult {
+    pub fn neg(&self, value: &IInterval) -> ArithResult {
         if self.checked {
             Self::strict_neg(value)
         } else {
             Self::wrapping_neg(value)
         }
     }
-    pub fn sub(&self, left: &IntInterval, right: &IntInterval) -> ArithResult {
+    pub fn sub(&self, left: &IInterval, right: &IInterval) -> ArithResult {
         if self.checked {
             Self::strict_sub(left, right)
         } else {
             Self::wrapping_sub(left, right)
         }
     }
-    pub fn mul(&self, left: &IntInterval, right: &IntInterval) -> ArithResult {
+    pub fn mul(&self, left: &IInterval, right: &IInterval) -> ArithResult {
         if self.checked {
             Self::strict_mul(left, right)
         } else {
             Self::wrapping_mul(left, right)
         }
     }
-    pub fn div(&self, left: &IntInterval, right: &IntInterval) -> ArithResult {
+    pub fn div(&self, left: &IInterval, right: &IInterval) -> ArithResult {
         if self.checked {
             Self::strict_div(left, right)
         } else {
             Self::wrapping_div(left, right)
         }
     }
-    pub fn rem(&self, left: &IntInterval, right: &IntInterval) -> ArithResult {
+    pub fn rem(&self, left: &IInterval, right: &IInterval) -> ArithResult {
         if self.checked {
             Self::strict_rem(left, right)
         } else {
             Self::wrapping_rem(left, right)
         }
     }
-    pub fn abs(&self, value: &IntInterval) -> ArithResult {
+    pub fn abs(&self, value: &IInterval) -> ArithResult {
         if self.checked {
             Self::strict_abs(value)
         } else {
@@ -143,7 +143,7 @@ impl Arithmetic {
     }
 
     /// Addition which saturates on overflow.
-    pub fn saturating_add(lhs: &IntInterval, rhs: &IntInterval) -> ArithResult {
+    pub fn saturating_add(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
         check_non_empty!(lhs, rhs);
 
@@ -155,7 +155,7 @@ impl Arithmetic {
                 let min = l_min.saturating_add(r_min).clamp(t_min, t_max);
                 let max = l_max.saturating_add(r_max).clamp(t_min, t_max);
 
-                Ok(IntInterval::new_signed(ty, min, max))
+                Ok(IInterval::new_signed(ty, min, max))
             }
             IntTypeInfo::Unsigned(t_max) => {
                 let (l_min, l_max) = lhs.as_unsigned();
@@ -164,12 +164,12 @@ impl Arithmetic {
                 let min = l_min.saturating_add(r_min).min(t_max);
                 let max = l_max.saturating_add(r_max).min(t_max);
 
-                Ok(IntInterval::new_unsigned(ty, min, max))
+                Ok(IInterval::new_unsigned(ty, min, max))
             }
         }
     }
     /// Addition which panics on overflow.
-    pub fn strict_add(lhs: &IntInterval, rhs: &IntInterval) -> ArithResult {
+    pub fn strict_add(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
         check_non_empty!(lhs, rhs);
 
@@ -185,11 +185,11 @@ impl Arithmetic {
                     // only overflow is possible
                     let Some(min) = l_min.checked_add(r_min) else {
                         // the sum will always overflow
-                        return Ok(IntInterval::empty(ty));
+                        return Ok(IInterval::empty(ty));
                     };
                     if min > t_max {
                         // the sum will always overflow
-                        return Ok(IntInterval::empty(ty));
+                        return Ok(IInterval::empty(ty));
                     }
                     min
                 };
@@ -198,11 +198,11 @@ impl Arithmetic {
                     // only underflow is possible
                     let Some(max) = l_max.checked_add(r_max) else {
                         // the sum will always underflow
-                        return Ok(IntInterval::empty(ty));
+                        return Ok(IInterval::empty(ty));
                     };
                     if max < t_min {
                         // the sum will always underflow
-                        return Ok(IntInterval::empty(ty));
+                        return Ok(IInterval::empty(ty));
                     }
                     max
                 } else {
@@ -210,7 +210,7 @@ impl Arithmetic {
                     l_max.saturating_add(r_max).min(t_max)
                 };
 
-                Ok(IntInterval::new_signed(ty, min, max))
+                Ok(IInterval::new_signed(ty, min, max))
             }
             IntTypeInfo::Unsigned(t_max) => {
                 let (l_min, l_max) = lhs.as_unsigned();
@@ -218,20 +218,20 @@ impl Arithmetic {
 
                 let Some(min) = l_min.checked_add(r_min) else {
                     // the sum will always overflow
-                    return Ok(IntInterval::empty(ty));
+                    return Ok(IInterval::empty(ty));
                 };
                 if min > t_max {
                     // the sum will always overflow
-                    return Ok(IntInterval::empty(ty));
+                    return Ok(IInterval::empty(ty));
                 }
                 let max = l_max.saturating_add(r_max).min(t_max);
 
-                Ok(IntInterval::new_unsigned(ty, min, max))
+                Ok(IInterval::new_unsigned(ty, min, max))
             }
         }
     }
     /// Addition which wraps on overflow.
-    pub fn wrapping_add(lhs: &IntInterval, rhs: &IntInterval) -> ArithResult {
+    pub fn wrapping_add(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
         check_non_empty!(lhs, rhs);
 
@@ -276,15 +276,15 @@ impl Arithmetic {
 
                 if min_overflow == max_overflow {
                     // If both overflow the same way, the result is simply the range
-                    Ok(IntInterval::new_signed(ty, min, max))
+                    Ok(IInterval::new_signed(ty, min, max))
                 } else if min_overflow == Overflow::None || max_overflow == Overflow::None {
                     // If one doesn't over/underflow while the other does,
                     // then the result is the entire range.
-                    Ok(IntInterval::new_signed(ty, t_min, t_max))
+                    Ok(IInterval::new_signed(ty, t_min, t_max))
                 } else {
                     // Lastly, min underflow while max overflows.
                     // Idk what to do in this case, so just return the entire range.
-                    Ok(IntInterval::new_signed(ty, t_min, t_max))
+                    Ok(IInterval::new_signed(ty, t_min, t_max))
                 }
             }
             IntTypeInfo::Unsigned(t_max) => {
@@ -305,16 +305,16 @@ impl Arithmetic {
 
                 if !min_overflow && max_overflow {
                     // this means that both 0 and t_max are possible results
-                    return Ok(IntInterval::new_unsigned(ty, 0, t_max));
+                    return Ok(IInterval::new_unsigned(ty, 0, t_max));
                 }
 
-                Ok(IntInterval::new_unsigned(ty, min, max))
+                Ok(IInterval::new_unsigned(ty, min, max))
             }
         }
     }
 
     /// Negation which saturates on overflow.
-    pub fn saturating_neg(x: &IntInterval) -> ArithResult {
+    pub fn saturating_neg(x: &IInterval) -> ArithResult {
         check_non_empty!(x);
 
         match x.ty.info() {
@@ -326,13 +326,13 @@ impl Arithmetic {
                 let min = x_max.saturating_neg().min(t_max);
                 let max = x_min.saturating_neg().min(t_max);
 
-                Ok(IntInterval::new_signed(x.ty, min, max))
+                Ok(IInterval::new_signed(x.ty, min, max))
             }
             IntTypeInfo::Unsigned(_) => Err(ArithError::Unsupported),
         }
     }
     /// Negation which panics on overflow.
-    pub fn strict_neg(x: &IntInterval) -> ArithResult {
+    pub fn strict_neg(x: &IInterval) -> ArithResult {
         check_non_empty!(x);
 
         match x.ty.info() {
@@ -343,13 +343,13 @@ impl Arithmetic {
 
                 if x_max == t_min {
                     // all values in the range will overflow
-                    Ok(IntInterval::empty(x.ty))
+                    Ok(IInterval::empty(x.ty))
                 } else {
                     if x_min == t_min {
                         x_min += 1; // ignore value that will overflow
                     }
 
-                    Ok(IntInterval::new_signed(x.ty, -x_max, -x_min))
+                    Ok(IInterval::new_signed(x.ty, -x_max, -x_min))
                 }
             }
             IntTypeInfo::Unsigned(_) => {
@@ -357,15 +357,15 @@ impl Arithmetic {
 
                 if x_min == 0 {
                     // contains zero
-                    Ok(IntInterval::new_unsigned(x.ty, 0, 0))
+                    Ok(IInterval::new_unsigned(x.ty, 0, 0))
                 } else {
-                    Ok(IntInterval::empty(x.ty))
+                    Ok(IInterval::empty(x.ty))
                 }
             }
         }
     }
     /// Negation which wraps on overflow.
-    pub fn wrapping_neg(x: &IntInterval) -> ArithResult {
+    pub fn wrapping_neg(x: &IInterval) -> ArithResult {
         check_non_empty!(x);
 
         match x.ty.info() {
@@ -386,7 +386,7 @@ impl Arithmetic {
                     let min = if overflow { t_min } else { -x_max };
                     let max = -x_min;
 
-                    Ok(IntInterval::new_signed(x.ty, min, max))
+                    Ok(IInterval::new_signed(x.ty, min, max))
                 }
             }
             IntTypeInfo::Unsigned(t_max) => {
@@ -394,19 +394,19 @@ impl Arithmetic {
 
                 if x_min == 0 && x_max != 0 {
                     // this means that the range wraps around and covers both 0
-                    Ok(IntInterval::new_unsigned(x.ty, 0, t_max))
+                    Ok(IInterval::new_unsigned(x.ty, 0, t_max))
                 } else {
                     let min = x_max.wrapping_neg() & t_max;
                     let max = x_min.wrapping_neg() & t_max;
 
-                    Ok(IntInterval::new_unsigned(x.ty, min, max))
+                    Ok(IInterval::new_unsigned(x.ty, min, max))
                 }
             }
         }
     }
 
     /// Subtraction which saturates on overflow.
-    pub fn saturating_sub(lhs: &IntInterval, rhs: &IntInterval) -> ArithResult {
+    pub fn saturating_sub(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
         check_non_empty!(lhs, rhs);
 
@@ -418,7 +418,7 @@ impl Arithmetic {
                 let min = l_min.saturating_sub(r_max).clamp(t_min, t_max);
                 let max = l_max.saturating_sub(r_min).clamp(t_min, t_max);
 
-                Ok(IntInterval::new_signed(ty, min, max))
+                Ok(IInterval::new_signed(ty, min, max))
             }
             IntTypeInfo::Unsigned(_) => {
                 let (l_min, l_max) = lhs.as_unsigned();
@@ -427,12 +427,12 @@ impl Arithmetic {
                 let min = l_min.saturating_sub(r_max);
                 let max = l_max.saturating_sub(r_min);
 
-                Ok(IntInterval::new_unsigned(ty, min, max))
+                Ok(IInterval::new_unsigned(ty, min, max))
             }
         }
     }
     /// Subtraction which panics on overflow.
-    pub fn strict_sub(lhs: &IntInterval, rhs: &IntInterval) -> ArithResult {
+    pub fn strict_sub(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
         check_non_empty!(lhs, rhs);
 
@@ -451,10 +451,10 @@ impl Arithmetic {
                     // range for `lhs - t_min`
                     let min_range = if l_min >= 0 {
                         // lhs >= 0, so the result will always overflow
-                        IntInterval::empty(ty)
+                        IInterval::empty(ty)
                     } else {
                         // lhs < 0, so the result will always underflow
-                        IntInterval::new_signed(
+                        IInterval::new_signed(
                             ty,
                             l_min - t_min,
                             l_max.saturating_sub(t_min).min(t_max),
@@ -469,11 +469,11 @@ impl Arithmetic {
 
                     min_range
                 } else {
-                    IntInterval::empty(ty)
+                    IInterval::empty(ty)
                 };
 
                 // we can now safely negate rhs
-                let rhs_neg = IntInterval::new_signed(ty, -r_max, -r_min);
+                let rhs_neg = IInterval::new_signed(ty, -r_max, -r_min);
                 let sum = Self::strict_add(lhs, &rhs_neg)?;
                 Ok(sum.hull(&min_range))
             }
@@ -485,20 +485,20 @@ impl Arithmetic {
                 let (max, overflows) = l_max.overflowing_sub(r_min);
 
                 if overflows {
-                    Ok(IntInterval::empty(ty))
+                    Ok(IInterval::empty(ty))
                 } else {
-                    Ok(IntInterval::new_unsigned(ty, min, max))
+                    Ok(IInterval::new_unsigned(ty, min, max))
                 }
             }
         }
     }
     /// Subtraction which wrap on overflow.
-    pub fn wrapping_sub(lhs: &IntInterval, rhs: &IntInterval) -> ArithResult {
+    pub fn wrapping_sub(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         Self::wrapping_add(lhs, &Self::wrapping_neg(rhs)?)
     }
 
     /// Multiplication which saturates on overflow and panics on rhs == 0.
-    pub fn saturating_mul(lhs: &IntInterval, rhs: &IntInterval) -> ArithResult {
+    pub fn saturating_mul(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
         check_non_empty!(lhs, rhs);
 
@@ -516,7 +516,7 @@ impl Arithmetic {
                 let min = min_4(&points).clamp(t_min, t_max);
                 let max = max_4(&points).clamp(t_min, t_max);
 
-                Ok(IntInterval::new_signed(ty, min, max))
+                Ok(IInterval::new_signed(ty, min, max))
             }
             IntTypeInfo::Unsigned(t_max) => {
                 let (l_min, l_max) = lhs.as_unsigned();
@@ -525,12 +525,12 @@ impl Arithmetic {
                 let min = l_min.saturating_mul(r_min).min(t_max);
                 let max = l_max.saturating_mul(r_max).min(t_max);
 
-                Ok(IntInterval::new_unsigned(ty, min, max))
+                Ok(IInterval::new_unsigned(ty, min, max))
             }
         }
     }
     /// Multiplication which panics on overflow and panics on rhs == 0.
-    pub fn strict_mul(lhs: &IntInterval, rhs: &IntInterval) -> ArithResult {
+    pub fn strict_mul(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
         check_non_empty!(lhs, rhs);
 
@@ -551,7 +551,7 @@ impl Arithmetic {
                                 mut r_min: i128,
                                 mut r_max: i128,
                                 mut r_sign: Sign|
-                 -> IntInterval {
+                 -> IInterval {
                     debug_assert!(l_min > 0 || l_max < 0);
                     debug_assert!(r_min > 0 || r_max < 0);
 
@@ -567,9 +567,9 @@ impl Arithmetic {
                             let (min, min_overflow) = l_min.overflowing_mul(r_min);
                             if min_overflow || min > t_max {
                                 // the multiplication will always overflow
-                                return IntInterval::empty(ty);
+                                return IInterval::empty(ty);
                             }
-                            IntInterval::new_signed(ty, min, l_max.saturating_mul(r_max).min(t_max))
+                            IInterval::new_signed(ty, min, l_max.saturating_mul(r_max).min(t_max))
                         }
                         (Sign::Positive, Sign::Negative) => unreachable!(),
                         (Sign::Negative, Sign::Positive) => {
@@ -578,18 +578,18 @@ impl Arithmetic {
                             let (max, max_overflow) = l_max.overflowing_mul(r_min);
                             if max_overflow || max < t_min {
                                 // the multiplication will always overflow
-                                return IntInterval::empty(ty);
+                                return IInterval::empty(ty);
                             }
-                            IntInterval::new_signed(ty, l_min.saturating_mul(r_max).max(t_min), max)
+                            IInterval::new_signed(ty, l_min.saturating_mul(r_max).max(t_min), max)
                         }
                         (Sign::Negative, Sign::Negative) => {
                             // both negative
                             let (min, min_overflow) = l_max.overflowing_mul(r_max);
                             if min_overflow || min > t_max {
                                 // the multiplication will always overflow
-                                return IntInterval::empty(ty);
+                                return IInterval::empty(ty);
                             }
-                            IntInterval::new_signed(
+                            IInterval::new_signed(
                                 ty,
                                 l_max * r_max,
                                 l_min.saturating_mul(r_min).min(t_max),
@@ -598,10 +598,10 @@ impl Arithmetic {
                     }
                 };
 
-                let split_l = |r_min: i128, r_max: i128, r_sign: Sign| -> IntInterval {
+                let split_l = |r_min: i128, r_max: i128, r_sign: Sign| -> IInterval {
                     debug_assert!(r_min > 0 || r_max < 0);
 
-                    let mut result = IntInterval::empty(ty);
+                    let mut result = IInterval::empty(ty);
 
                     if l_min < 0 {
                         result = result.hull(&quadrant(
@@ -614,7 +614,7 @@ impl Arithmetic {
                         ));
                     }
                     if l_min <= 0 && 0 <= l_max {
-                        result = result.hull(&IntInterval::single_signed(ty, 0));
+                        result = result.hull(&IInterval::single_signed(ty, 0));
                     }
                     if l_max > 0 {
                         result = result.hull(&quadrant(
@@ -630,13 +630,13 @@ impl Arithmetic {
                     result
                 };
 
-                let mut result = IntInterval::empty(ty);
+                let mut result = IInterval::empty(ty);
 
                 if r_min < 0 {
                     result = result.hull(&split_l(r_min, r_max.min(-1), Sign::Negative));
                 }
                 if r_min <= 0 && 0 <= r_max {
-                    result = result.hull(&IntInterval::single_signed(ty, 0));
+                    result = result.hull(&IInterval::single_signed(ty, 0));
                 }
                 if r_max > 0 {
                     result = result.hull(&split_l(r_min.max(1), r_max, Sign::Positive));
@@ -651,16 +651,16 @@ impl Arithmetic {
                 let (min, min_overflow) = l_min.overflowing_mul(r_min);
                 if min_overflow || min > t_max {
                     // the multiplication will always overflow
-                    return Ok(IntInterval::empty(ty));
+                    return Ok(IInterval::empty(ty));
                 }
                 let max = l_max.saturating_mul(r_max).min(t_max);
 
-                Ok(IntInterval::new_unsigned(ty, min, max))
+                Ok(IInterval::new_unsigned(ty, min, max))
             }
         }
     }
     /// Multiplication which wraps on overflow and panics on rhs == 0.
-    pub fn wrapping_mul(lhs: &IntInterval, rhs: &IntInterval) -> ArithResult {
+    pub fn wrapping_mul(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
         check_non_empty!(lhs, rhs);
 
@@ -680,23 +680,23 @@ impl Arithmetic {
                     let max = max_4(&points);
                     debug_assert!(min <= max);
                     if t_min <= min && max <= t_max {
-                        return Ok(IntInterval::new_signed(ty, min, max));
+                        return Ok(IInterval::new_signed(ty, min, max));
                     }
                 }
 
-                Ok(IntInterval::full(ty))
+                Ok(IInterval::full(ty))
             }
             IntTypeInfo::Unsigned(t_max) => {
                 let (l_min, l_max) = lhs.as_unsigned();
                 let (r_min, r_max) = rhs.as_unsigned();
 
-                let mul_single = |l_min: u128, l_max: u128, r: u128| -> IntInterval {
+                let mul_single = |l_min: u128, l_max: u128, r: u128| -> IInterval {
                     let min = l_min.wrapping_mul(r) & t_max;
                     let max = l_max.wrapping_mul(r) & t_max;
                     if min <= max && (l_max - l_min).saturating_mul(r) < t_max {
-                        IntInterval::new_unsigned(ty, min, max)
+                        IInterval::new_unsigned(ty, min, max)
                     } else {
-                        IntInterval::full(ty)
+                        IInterval::full(ty)
                     }
                 };
 
@@ -708,19 +708,19 @@ impl Arithmetic {
                         mul_single(l_min, l_max, r_min)
                     } else {
                         // I'm out of ideas
-                        IntInterval::full(ty)
+                        IInterval::full(ty)
                     };
                     return Ok(range);
                 }
                 let min = l_min.wrapping_mul(r_min);
 
-                Ok(IntInterval::new_unsigned(ty, min, max))
+                Ok(IInterval::new_unsigned(ty, min, max))
             }
         }
     }
 
     /// Division which saturates on overflow and panics on rhs == 0.
-    pub fn saturating_div(lhs: &IntInterval, rhs: &IntInterval) -> ArithResult {
+    pub fn saturating_div(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
         check_non_empty!(lhs, rhs);
 
@@ -736,7 +736,7 @@ impl Arithmetic {
 
                 if l_min == t_min && r_min <= -1 && -1 <= r_max {
                     // t_min / -1 will overflow, so we have to add t_min to the result
-                    Ok(IntInterval::single_signed(ty, t_max).hull(&strict))
+                    Ok(IInterval::single_signed(ty, t_max).hull(&strict))
                 } else {
                     Ok(strict)
                 }
@@ -746,7 +746,7 @@ impl Arithmetic {
         }
     }
     /// Division which panics on overflow and rhs == 0.
-    pub fn strict_div(lhs: &IntInterval, rhs: &IntInterval) -> ArithResult {
+    pub fn strict_div(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
         check_non_empty!(lhs, rhs);
 
@@ -764,7 +764,7 @@ impl Arithmetic {
                 // 4. 1..=inf: the positive range
 
                 // this will be the total union of all cases
-                let mut result = IntInterval::empty(ty);
+                let mut result = IInterval::empty(ty);
 
                 // case 1: -inf..=-2
                 if r_min <= -2 {
@@ -799,7 +799,7 @@ impl Arithmetic {
 
                 if r_max == 0 {
                     // always div by 0
-                    return Ok(IntInterval::empty(ty));
+                    return Ok(IInterval::empty(ty));
                 }
                 if r_min == 0 {
                     r_min = 1; // to avoid division by zero
@@ -808,12 +808,12 @@ impl Arithmetic {
                 let min = l_min / r_max;
                 let max = l_max / r_min;
 
-                Ok(IntInterval::new_unsigned(ty, min, max))
+                Ok(IInterval::new_unsigned(ty, min, max))
             }
         }
     }
     /// Division which wrap on overflow and panics on rhs == 0.
-    pub fn wrapping_div(lhs: &IntInterval, rhs: &IntInterval) -> ArithResult {
+    pub fn wrapping_div(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
         check_non_empty!(lhs, rhs);
 
@@ -829,7 +829,7 @@ impl Arithmetic {
 
                 if l_min == t_min && r_min <= -1 && -1 <= r_max {
                     // t_min / -1 will overflow, so we have to add t_min to the result
-                    Ok(IntInterval::single_signed(ty, t_min).hull(&strict))
+                    Ok(IInterval::single_signed(ty, t_min).hull(&strict))
                 } else {
                     Ok(strict)
                 }
@@ -840,7 +840,7 @@ impl Arithmetic {
     }
 
     /// Remainder which panics on overflow and rhs == 0.
-    pub fn strict_rem(lhs: &IntInterval, rhs: &IntInterval) -> ArithResult {
+    pub fn strict_rem(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
         check_non_empty!(lhs, rhs);
 
@@ -861,16 +861,16 @@ impl Arithmetic {
                 // Note that -rhs and -lhs can overflow , so that needs
                 // to be handled separately too.
 
-                let mut result = IntInterval::empty(ty);
+                let mut result = IInterval::empty(ty);
 
                 // handle rhs == t_min separately
                 if r_min == t_min {
                     let min_range = if l_min == t_min {
-                        let zero = IntInterval::single_signed(ty, 0);
+                        let zero = IInterval::single_signed(ty, 0);
                         if l_max == t_min {
                             zero
                         } else {
-                            zero.hull(&IntInterval::new_signed(ty, l_min + 1, l_max))
+                            zero.hull(&IInterval::new_signed(ty, l_min + 1, l_max))
                         }
                     } else {
                         lhs.clone()
@@ -887,7 +887,7 @@ impl Arithmetic {
                 }
 
                 let positive_everything =
-                    |l_min: i128, l_max: i128, r_min: i128, r_max: i128| -> IntInterval {
+                    |l_min: i128, l_max: i128, r_min: i128, r_max: i128| -> IInterval {
                         debug_assert!(0 <= l_min && l_min <= l_max && l_max <= t_max);
                         debug_assert!(0 <= r_min && r_min <= r_max && r_max <= t_max);
 
@@ -901,18 +901,18 @@ impl Arithmetic {
                                 let min = l_min % r;
                                 let max = l_max % r;
                                 if min <= max {
-                                    return IntInterval::new_signed(ty, min, max);
+                                    return IInterval::new_signed(ty, min, max);
                                 }
                             }
                         }
 
                         if l_max < r_min {
-                            return IntInterval::new_signed(ty, l_min, l_max);
+                            return IInterval::new_signed(ty, l_min, l_max);
                         }
 
-                        IntInterval::new_signed(ty, 0, l_max.min(r_max - 1))
+                        IInterval::new_signed(ty, 0, l_max.min(r_max - 1))
                     };
-                let positive_rhs = |r_min: i128, r_max: i128| -> IntInterval {
+                let positive_rhs = |r_min: i128, r_max: i128| -> IInterval {
                     debug_assert!(0 < r_min && r_min <= r_max && r_max <= t_max);
 
                     let mut l_min = l_min;
@@ -920,9 +920,9 @@ impl Arithmetic {
                     let min_range = if l_min == t_min {
                         l_min += 1;
                         let min_range = if r_min == r_max {
-                            IntInterval::single_signed(ty, t_min % r_min)
+                            IInterval::single_signed(ty, t_min % r_min)
                         } else {
-                            IntInterval::new_signed(ty, -r_max + 1, 0)
+                            IInterval::new_signed(ty, -r_max + 1, 0)
                         };
 
                         if l_max == t_min {
@@ -931,21 +931,21 @@ impl Arithmetic {
 
                         min_range
                     } else {
-                        IntInterval::empty(ty)
+                        IInterval::empty(ty)
                     };
 
                     let negative = if l_min < 0 {
                         // this is -(-lhs & rhs)
                         let (min, max) =
                             positive_everything((-l_max).max(0), -l_min, r_min, r_max).as_signed();
-                        IntInterval::new_signed(ty, -max, -min)
+                        IInterval::new_signed(ty, -max, -min)
                     } else {
-                        IntInterval::empty(ty)
+                        IInterval::empty(ty)
                     };
                     let positive = if l_max >= 0 {
                         positive_everything(l_min.max(0), l_max, r_min, r_max)
                     } else {
-                        IntInterval::empty(ty)
+                        IInterval::empty(ty)
                     };
 
                     negative.hull(&positive).hull(&min_range)
@@ -960,7 +960,7 @@ impl Arithmetic {
                 if r_min <= -1 && -1 <= r_max {
                     // t_min % -1 panics, while everything else goes to 0
                     if l_max != t_min {
-                        result = result.hull(&IntInterval::single_signed(ty, 0));
+                        result = result.hull(&IInterval::single_signed(ty, 0));
                     }
                 }
 
@@ -980,7 +980,7 @@ impl Arithmetic {
 
                 if r_max == 0 {
                     // always div by 0
-                    return Ok(IntInterval::empty(ty));
+                    return Ok(IInterval::empty(ty));
                 }
                 if r_min == 0 {
                     r_min = 1; // to avoid division by zero
@@ -996,7 +996,7 @@ impl Arithmetic {
                         let min = l_min % r;
                         let max = l_max % r;
                         if min <= max {
-                            return Ok(IntInterval::new_unsigned(ty, min, max));
+                            return Ok(IInterval::new_unsigned(ty, min, max));
                         }
                     }
                 }
@@ -1005,12 +1005,12 @@ impl Arithmetic {
                     return Ok(lhs.clone());
                 }
 
-                Ok(IntInterval::new_unsigned(ty, 0, l_max.min(r_max - 1)))
+                Ok(IInterval::new_unsigned(ty, 0, l_max.min(r_max - 1)))
             }
         }
     }
     /// Remainder which wrap on overflow and panics on rhs == 0.
-    pub fn wrapping_rem(lhs: &IntInterval, rhs: &IntInterval) -> ArithResult {
+    pub fn wrapping_rem(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
         check_non_empty!(lhs, rhs);
 
@@ -1026,7 +1026,7 @@ impl Arithmetic {
 
                 if l_min == t_min && r_min <= -1 && -1 <= r_max {
                     // t_min % -1 == 0 when wrapping
-                    Ok(IntInterval::single_signed(ty, 0).hull(&strict))
+                    Ok(IInterval::single_signed(ty, 0).hull(&strict))
                 } else {
                     Ok(strict)
                 }
@@ -1037,7 +1037,7 @@ impl Arithmetic {
     }
 
     /// Absolute value which saturates on overflow.
-    pub fn saturating_abs(x: &IntInterval) -> ArithResult {
+    pub fn saturating_abs(x: &IInterval) -> ArithResult {
         check_non_empty!(x);
 
         match x.ty.info() {
@@ -1048,7 +1048,7 @@ impl Arithmetic {
 
                 if x_max <= 0 {
                     // already negative, so return the positive range
-                    Ok(IntInterval::new_signed(
+                    Ok(IInterval::new_signed(
                         x.ty,
                         x_max.saturating_neg().min(t_max),
                         x_min.saturating_neg().min(t_max),
@@ -1058,7 +1058,7 @@ impl Arithmetic {
                     Ok(x.clone())
                 } else {
                     // contains zero, so return the positive range
-                    Ok(IntInterval::new_signed(
+                    Ok(IInterval::new_signed(
                         x.ty,
                         0,
                         x_max.max(x_min.saturating_neg()).min(t_max),
@@ -1069,7 +1069,7 @@ impl Arithmetic {
         }
     }
     /// Absolute value which panics on overflow.
-    pub fn strict_abs(x: &IntInterval) -> ArithResult {
+    pub fn strict_abs(x: &IInterval) -> ArithResult {
         check_non_empty!(x);
 
         match x.ty.info() {
@@ -1083,7 +1083,7 @@ impl Arithmetic {
                     Ok(x.clone())
                 } else if x_max == t_min {
                     // all values in the range will overflow
-                    Ok(IntInterval::empty(x.ty))
+                    Ok(IInterval::empty(x.ty))
                 } else {
                     if x_min == t_min {
                         x_min += 1; // ignore value that will overflow
@@ -1091,9 +1091,9 @@ impl Arithmetic {
 
                     if x_max <= 0 {
                         // already negative, so return the positive range
-                        Ok(IntInterval::new_signed(x.ty, -x_max, -x_min))
+                        Ok(IInterval::new_signed(x.ty, -x_max, -x_min))
                     } else {
-                        Ok(IntInterval::new_signed(x.ty, 0, x_max.max(-x_min)))
+                        Ok(IInterval::new_signed(x.ty, 0, x_max.max(-x_min)))
                     }
                 }
             }
@@ -1101,7 +1101,7 @@ impl Arithmetic {
         }
     }
     /// Absolute value which wraps on overflow.
-    pub fn wrapping_abs(x: &IntInterval) -> ArithResult {
+    pub fn wrapping_abs(x: &IInterval) -> ArithResult {
         check_non_empty!(x);
 
         match x.ty.info() {
@@ -1114,7 +1114,7 @@ impl Arithmetic {
                 let (x_min, x_max) = x.as_signed();
 
                 if x_min == t_min {
-                    let min_range = IntInterval::single_signed(x.ty, t_min);
+                    let min_range = IInterval::single_signed(x.ty, t_min);
 
                     if x_max == t_min {
                         Ok(min_range)
@@ -1130,7 +1130,7 @@ impl Arithmetic {
     }
 
     /// Minimum.
-    pub fn min(lhs: &IntInterval, rhs: &IntInterval) -> ArithResult {
+    pub fn min(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
         check_non_empty!(lhs, rhs);
 
@@ -1142,7 +1142,7 @@ impl Arithmetic {
                 let min = l_min.min(r_min);
                 let max = l_max.min(r_max);
 
-                Ok(IntInterval::new_signed(ty, min, max))
+                Ok(IInterval::new_signed(ty, min, max))
             }
             IntTypeInfo::Unsigned(_) => {
                 let (l_min, l_max) = lhs.as_unsigned();
@@ -1151,12 +1151,12 @@ impl Arithmetic {
                 let min = l_min.min(r_min);
                 let max = l_max.min(r_max);
 
-                Ok(IntInterval::new_unsigned(ty, min, max))
+                Ok(IInterval::new_unsigned(ty, min, max))
             }
         }
     }
     /// Maximum.
-    pub fn max(lhs: &IntInterval, rhs: &IntInterval) -> ArithResult {
+    pub fn max(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
         check_non_empty!(lhs, rhs);
 
@@ -1168,7 +1168,7 @@ impl Arithmetic {
                 let min = l_min.max(r_min);
                 let max = l_max.max(r_max);
 
-                Ok(IntInterval::new_signed(ty, min, max))
+                Ok(IInterval::new_signed(ty, min, max))
             }
             IntTypeInfo::Unsigned(_) => {
                 let (l_min, l_max) = lhs.as_unsigned();
@@ -1177,27 +1177,27 @@ impl Arithmetic {
                 let min = l_min.max(r_min);
                 let max = l_max.max(r_max);
 
-                Ok(IntInterval::new_unsigned(ty, min, max))
+                Ok(IInterval::new_unsigned(ty, min, max))
             }
         }
     }
 
     /// Bitwise AND.
-    pub fn and(lhs: &IntInterval, rhs: &IntInterval) -> ArithResult {
+    pub fn and(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
         check_non_empty!(lhs, rhs);
 
-        fn and(lhs: &IntInterval, rhs: &IntInterval) -> IntInterval {
+        fn and(lhs: &IInterval, rhs: &IInterval) -> IInterval {
             debug_assert_eq!(lhs.ty, rhs.ty);
             debug_assert!(!lhs.is_empty() && !rhs.is_empty());
 
-            let l_bits = IntBits::from_non_empty(lhs);
-            let r_bits = IntBits::from_non_empty(rhs);
+            let l_bits = Bits::from_non_empty(lhs);
+            let r_bits = Bits::from_non_empty(rhs);
 
             let zero = l_bits.zero & r_bits.zero;
             let one = l_bits.one & r_bits.one;
 
-            IntBits::new(zero, one).to_interval(lhs.ty)
+            Bits::new(zero, one).to_interval(lhs.ty)
         }
 
         if ty.is_signed() {
@@ -1212,14 +1212,14 @@ impl Arithmetic {
                 // non-negative parts, compute the `and` for each part separately,
                 // and then combine the results.
                 if !l_neg {
-                    let l_n = IntInterval::new_signed(ty, l_min, -1);
-                    let l_p = IntInterval::new_signed(ty, 0, l_max);
+                    let l_n = IInterval::new_signed(ty, l_min, -1);
+                    let l_p = IInterval::new_signed(ty, 0, l_max);
 
                     let result = if r_neg {
                         and(&l_n, rhs).hull(&and(&l_p, rhs))
                     } else {
-                        let r_n = IntInterval::new_signed(ty, r_min, -1);
-                        let r_p = IntInterval::new_signed(ty, 0, r_max);
+                        let r_n = IInterval::new_signed(ty, r_min, -1);
+                        let r_p = IInterval::new_signed(ty, 0, r_max);
                         and(&l_n, &r_n)
                             .hull(&and(&l_n, &r_p))
                             .hull(&and(&l_p, &r_n))
@@ -1229,8 +1229,8 @@ impl Arithmetic {
                 }
 
                 if !r_neg {
-                    let r_n = IntInterval::new_signed(ty, r_min, -1);
-                    let r_p = IntInterval::new_signed(ty, 0, r_max);
+                    let r_n = IInterval::new_signed(ty, r_min, -1);
+                    let r_p = IInterval::new_signed(ty, 0, r_max);
 
                     return Ok(and(lhs, &r_n).hull(&and(lhs, &r_p)));
                 }
@@ -1241,25 +1241,25 @@ impl Arithmetic {
         }
     }
     /// Bitwise OR.
-    pub fn or(lhs: &IntInterval, rhs: &IntInterval) -> ArithResult {
+    pub fn or(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
         check_non_empty!(lhs, rhs);
 
-        let l_bits = IntBits::from_non_empty(lhs);
-        let r_bits = IntBits::from_non_empty(rhs);
+        let l_bits = Bits::from_non_empty(lhs);
+        let r_bits = Bits::from_non_empty(rhs);
 
         let zero = l_bits.zero | r_bits.zero;
         let one = l_bits.one | r_bits.one;
 
-        Ok(IntBits::new(zero, one).to_interval(ty))
+        Ok(Bits::new(zero, one).to_interval(ty))
     }
     /// Bitwise XOR.
-    pub fn xor(lhs: &IntInterval, rhs: &IntInterval) -> ArithResult {
+    pub fn xor(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
         check_non_empty!(lhs, rhs);
 
-        let l_bits = IntBits::from_non_empty(lhs);
-        let r_bits = IntBits::from_non_empty(rhs);
+        let l_bits = Bits::from_non_empty(lhs);
+        let r_bits = Bits::from_non_empty(rhs);
 
         // bits that are different in lhs and rhs
         let l_diff = l_bits.zero ^ l_bits.one;
@@ -1270,10 +1270,10 @@ impl Arithmetic {
         let zero = xor & !diff;
         let one = xor | diff;
 
-        Ok(IntBits::new(zero, one).to_interval(ty))
+        Ok(Bits::new(zero, one).to_interval(ty))
     }
     /// Bitwise NOT.
-    pub fn not(x: &IntInterval) -> ArithResult {
+    pub fn not(x: &IInterval) -> ArithResult {
         check_non_empty!(x);
 
         let ty = x.ty;
@@ -1283,23 +1283,19 @@ impl Arithmetic {
                 let (x_min, x_max) = x.as_signed();
 
                 // maybe the only operation where signed is simpler than unsigned
-                Ok(IntInterval::new_signed(ty, !x_max, !x_min))
+                Ok(IInterval::new_signed(ty, !x_max, !x_min))
             }
             IntTypeInfo::Unsigned(t_max) => {
                 let (x_min, x_max) = x.as_unsigned();
 
-                Ok(IntInterval::new_unsigned(
-                    ty,
-                    !x_max & t_max,
-                    !x_min & t_max,
-                ))
+                Ok(IInterval::new_unsigned(ty, !x_max & t_max, !x_min & t_max))
             }
         }
     }
 
-    pub fn leading_zeros(x: &IntInterval) -> ArithResult {
+    pub fn leading_zeros(x: &IInterval) -> ArithResult {
         if x.is_empty() {
-            return Ok(IntInterval::empty(IntType::U32));
+            return Ok(IInterval::empty(IntType::U32));
         }
 
         let bit_width = x.ty.bits() as u32;
@@ -1309,15 +1305,15 @@ impl Arithmetic {
             let r_min = max.leading_zeros().saturating_sub(padding);
             let r_max = min.leading_zeros().saturating_sub(padding);
 
-            IntInterval::new_unsigned(IntType::U32, r_min as u128, r_max as u128)
+            IInterval::new_unsigned(IntType::U32, r_min as u128, r_max as u128)
         }))
     }
-    pub fn leading_ones(x: &IntInterval) -> ArithResult {
+    pub fn leading_ones(x: &IInterval) -> ArithResult {
         Self::leading_zeros(&Self::not(x)?)
     }
-    pub fn trailing_zeros(x: &IntInterval) -> ArithResult {
+    pub fn trailing_zeros(x: &IInterval) -> ArithResult {
         if x.is_empty() {
-            return Ok(IntInterval::empty(IntType::U32));
+            return Ok(IInterval::empty(IntType::U32));
         }
 
         let bit_width = x.ty.bits() as u32;
@@ -1325,7 +1321,7 @@ impl Arithmetic {
         Ok(split_by_sign_bit(x, |min, max| {
             if min == max {
                 let trailing = min.trailing_zeros().min(bit_width);
-                return IntInterval::single_unsigned(IntType::U32, trailing as u128);
+                return IInterval::single_unsigned(IntType::U32, trailing as u128);
             }
 
             // if min != max, then the range contains at least one odd value,
@@ -1333,7 +1329,7 @@ impl Arithmetic {
 
             if min == 0 {
                 // 0 is all 0s
-                return IntInterval::new_unsigned(IntType::U32, 0, bit_width as u128);
+                return IInterval::new_unsigned(IntType::U32, 0, bit_width as u128);
             }
 
             let mut a = min;
@@ -1350,15 +1346,15 @@ impl Arithmetic {
 
             let r_max = most_even.trailing_zeros();
 
-            IntInterval::new_unsigned(IntType::U32, 0, r_max as u128)
+            IInterval::new_unsigned(IntType::U32, 0, r_max as u128)
         }))
     }
-    pub fn trailing_ones(x: &IntInterval) -> ArithResult {
+    pub fn trailing_ones(x: &IInterval) -> ArithResult {
         Self::trailing_zeros(&Self::not(x)?)
     }
-    pub fn count_ones(x: &IntInterval) -> ArithResult {
+    pub fn count_ones(x: &IInterval) -> ArithResult {
         if x.is_empty() {
-            return Ok(IntInterval::empty(IntType::U32));
+            return Ok(IInterval::empty(IntType::U32));
         }
 
         let bit_width = x.ty.bits() as u32;
@@ -1376,37 +1372,37 @@ impl Arithmetic {
                 spread -= 1;
             }
 
-            IntInterval::new_unsigned(
+            IInterval::new_unsigned(
                 IntType::U32,
                 fixed_ones.min(bit_width).max(r_min) as u128,
                 (fixed_ones + spread).min(bit_width) as u128,
             )
         }))
     }
-    pub fn count_zeros(x: &IntInterval) -> ArithResult {
+    pub fn count_zeros(x: &IInterval) -> ArithResult {
         Self::count_ones(&Self::not(x)?)
     }
 
     /// Casts unsigned to signed.
-    pub fn cast_signed(x: &IntInterval) -> ArithResult {
+    pub fn cast_signed(x: &IInterval) -> ArithResult {
         if x.ty.is_signed() {
             return Err(ArithError::Unsupported);
         }
 
         if x.is_empty() {
-            return Ok(IntInterval::empty(x.ty.swap_signedness()));
+            return Ok(IInterval::empty(x.ty.swap_signedness()));
         }
 
         Ok(x.cast_unsigned_to_signed())
     }
     /// Casts signed to unsigned.
-    pub fn cast_unsigned(x: &IntInterval) -> ArithResult {
+    pub fn cast_unsigned(x: &IInterval) -> ArithResult {
         if !x.ty.is_signed() {
             return Err(ArithError::Unsupported);
         }
 
         if x.is_empty() {
-            return Ok(IntInterval::empty(x.ty.swap_signedness()));
+            return Ok(IInterval::empty(x.ty.swap_signedness()));
         }
 
         Ok(x.cast_signed_to_unsigned())

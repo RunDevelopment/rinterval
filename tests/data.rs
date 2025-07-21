@@ -1,13 +1,13 @@
 use std::fmt::{Debug, Display};
 
-use rinterval::{IntInterval, IntType};
+use rinterval::{IInterval, IntType};
 
 pub trait Int: Copy + Debug + Display + PartialOrd {
     fn get_type() -> IntType;
-    fn to_range(self) -> IntInterval;
-    fn range_from(min: Self, max: Self) -> IntInterval;
+    fn to_range(self) -> IInterval;
+    fn range_from(min: Self, max: Self) -> IInterval;
     fn midpoint(self, other: Self) -> Self;
-    fn contains(range: &IntInterval, value: Self) -> bool {
+    fn contains(range: &IInterval, value: Self) -> bool {
         range.is_superset_of(&value.to_range())
     }
 }
@@ -21,12 +21,12 @@ macro_rules! impl_signed {
                 // mid point is the average of the two values
                 self.midpoint(other)
             }
-            fn to_range(self) -> IntInterval {
-                IntInterval::single_signed($int_type, self as i128)
+            fn to_range(self) -> IInterval {
+                IInterval::single_signed($int_type, self as i128)
             }
-            fn range_from(min: Self, max: Self) -> IntInterval {
+            fn range_from(min: Self, max: Self) -> IInterval {
                 debug_assert!(min <= max);
-                IntInterval::new_signed($int_type, min as i128, max as i128)
+                IInterval::new_signed($int_type, min as i128, max as i128)
             }
         }
     };
@@ -41,12 +41,12 @@ macro_rules! impl_unsigned {
                 // mid point is the average of the two values
                 self.midpoint(other)
             }
-            fn to_range(self) -> IntInterval {
-                IntInterval::single_unsigned($int_type, self as u128)
+            fn to_range(self) -> IInterval {
+                IInterval::single_unsigned($int_type, self as u128)
             }
-            fn range_from(min: Self, max: Self) -> IntInterval {
+            fn range_from(min: Self, max: Self) -> IInterval {
                 debug_assert!(min <= max);
-                IntInterval::new_unsigned($int_type, min as u128, max as u128)
+                IInterval::new_unsigned($int_type, min as u128, max as u128)
             }
         }
     };
@@ -220,27 +220,27 @@ pub const VALUES_I128: &[i128] = &[
 
 macro_rules! single_i {
     ($t:expr, $v:expr) => {
-        IntInterval::single_signed($t, $v as i128)
+        IInterval::single_signed($t, $v as i128)
     };
 }
 macro_rules! single_u {
     ($t:expr, $v:expr) => {
-        IntInterval::single_unsigned($t, $v as u128)
+        IInterval::single_unsigned($t, $v as u128)
     };
 }
 macro_rules! range_i {
     ($t:expr, $min:expr, $max:expr) => {
-        IntInterval::new_signed($t, $min as i128, $max as i128)
+        IInterval::new_signed($t, $min as i128, $max as i128)
     };
 }
 macro_rules! range_u {
     ($t:expr, $min:expr, $max:expr) => {
-        IntInterval::new_unsigned($t, $min as u128, $max as u128)
+        IInterval::new_unsigned($t, $min as u128, $max as u128)
     };
 }
 
-pub const SNAPSHOT_RANGES_U8: &[IntInterval] = &[
-    IntInterval::empty(IntType::U8),
+pub const SNAPSHOT_RANGES_U8: &[IInterval] = &[
+    IInterval::empty(IntType::U8),
     single_u!(IntType::U8, 0),
     single_u!(IntType::U8, 1),
     single_u!(IntType::U8, 2),
@@ -268,8 +268,8 @@ pub const SNAPSHOT_RANGES_U8: &[IntInterval] = &[
     range_u!(IntType::U8, 0, u8::MAX - 1),
     range_u!(IntType::U8, u8::MAX - 2, u8::MAX),
 ];
-pub const SNAPSHOT_RANGES_U32: &[IntInterval] = &[
-    IntInterval::empty(IntType::U32),
+pub const SNAPSHOT_RANGES_U32: &[IInterval] = &[
+    IInterval::empty(IntType::U32),
     single_u!(IntType::U32, 0),
     single_u!(IntType::U32, 1),
     single_u!(IntType::U32, 2),
@@ -299,8 +299,8 @@ pub const SNAPSHOT_RANGES_U32: &[IntInterval] = &[
     range_u!(IntType::U32, u32::MAX - 2, u32::MAX),
 ];
 
-pub const SNAPSHOT_RANGES_I8: &[IntInterval] = &[
-    IntInterval::empty(IntType::I8),
+pub const SNAPSHOT_RANGES_I8: &[IInterval] = &[
+    IInterval::empty(IntType::I8),
     single_i!(IntType::I8, -128),
     single_i!(IntType::I8, -127),
     single_i!(IntType::I8, -126),
@@ -333,8 +333,8 @@ pub const SNAPSHOT_RANGES_I8: &[IntInterval] = &[
     range_i!(IntType::I8, i8::MIN + 1, i8::MAX),
     range_i!(IntType::I8, i8::MIN, i8::MAX - 1),
 ];
-pub const SNAPSHOT_RANGES_I32: &[IntInterval] = &[
-    IntInterval::empty(IntType::I32),
+pub const SNAPSHOT_RANGES_I32: &[IInterval] = &[
+    IInterval::empty(IntType::I32),
     single_i!(IntType::I32, i32::MIN),
     single_i!(IntType::I32, i32::MIN + 1),
     single_i!(IntType::I32, i32::MIN + 2),

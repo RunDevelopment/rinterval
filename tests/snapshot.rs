@@ -1,6 +1,6 @@
 use std::{collections::HashSet, path::PathBuf};
 
-use rinterval::{ArithResult, IntInterval};
+use rinterval::{ArithResult, IInterval};
 
 fn snapshot_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -40,7 +40,7 @@ pub fn assert_snapshot(name: &str, content: &str) {
     }
 }
 
-fn get_interval_types<'a>(ranges: impl Iterator<Item = &'a IntInterval>) -> (usize, String) {
+fn get_interval_types<'a>(ranges: impl Iterator<Item = &'a IInterval>) -> (usize, String) {
     let unique_types: HashSet<_> = ranges.map(|r| r.ty).collect();
     if unique_types.is_empty() {
         return (0, "none".to_string());
@@ -56,7 +56,7 @@ fn get_interval_types<'a>(ranges: impl Iterator<Item = &'a IntInterval>) -> (usi
 
     (unique_types.len(), formattted)
 }
-pub fn format_unary_data(data: &[(IntInterval, ArithResult<IntInterval>)]) -> String {
+pub fn format_unary_data(data: &[(IInterval, ArithResult<IInterval>)]) -> String {
     let input_types = get_interval_types(data.iter().map(|(i, _)| i));
     let mut result_types = get_interval_types(data.iter().filter_map(|(_, r)| r.as_ref().ok()));
     let has_error = data.iter().any(|(_, res)| res.is_err());
@@ -94,7 +94,7 @@ pub fn format_unary_data(data: &[(IntInterval, ArithResult<IntInterval>)]) -> St
 
     out
 }
-pub fn format_binary_data(data: &[(IntInterval, IntInterval, ArithResult<IntInterval>)]) -> String {
+pub fn format_binary_data(data: &[(IInterval, IInterval, ArithResult<IInterval>)]) -> String {
     let lhs_types = get_interval_types(data.iter().map(|(lhs, _, _)| lhs));
     let rhs_types = get_interval_types(data.iter().map(|(_, rhs, _)| rhs));
     let mut result_types = get_interval_types(data.iter().filter_map(|(_, _, r)| r.as_ref().ok()));

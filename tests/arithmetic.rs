@@ -1,4 +1,4 @@
-use rinterval::{ArithResult, Arithmetic, IntInterval};
+use rinterval::{ArithResult, Arithmetic, IInterval};
 
 mod data;
 mod snapshot;
@@ -6,8 +6,8 @@ mod snapshot;
 use data::*;
 use snapshot::*;
 
-fn for_each_range<I: Int>(values: &[I], mut f: impl FnMut(IntInterval, &[I])) {
-    f(IntInterval::empty(I::get_type()), &[]);
+fn for_each_range<I: Int>(values: &[I], mut f: impl FnMut(IInterval, &[I])) {
+    f(IInterval::empty(I::get_type()), &[]);
 
     for &v in values {
         f(v.to_range(), &[v]);
@@ -27,7 +27,7 @@ fn for_each_range<I: Int>(values: &[I], mut f: impl FnMut(IntInterval, &[I])) {
 fn test_unary<A: Int, R: Int>(
     values: &[A],
     scalar_op: impl Fn(A) -> Option<R>,
-    range_op: fn(&IntInterval) -> ArithResult,
+    range_op: fn(&IInterval) -> ArithResult,
 ) {
     for_each_range(values, |input_range, samples| {
         let range = match range_op(&input_range) {
@@ -55,7 +55,7 @@ fn test_binary<A: Int, B: Int, R: Int>(
     lhs_values: &[A],
     rhs_values: &[B],
     scalar_op: impl Fn(A, B) -> Option<R>,
-    range_op: fn(&IntInterval, &IntInterval) -> ArithResult,
+    range_op: fn(&IInterval, &IInterval) -> ArithResult,
 ) {
     for_each_range(lhs_values, |lhs_range, lhs_samples| {
         for_each_range(rhs_values, |rhs_range, rhs_samples| {
@@ -127,12 +127,12 @@ macro_rules! test_binary_all {
 
 struct UnaryOp {
     name: &'static str,
-    range_op: fn(&IntInterval) -> ArithResult,
+    range_op: fn(&IInterval) -> ArithResult,
     support_signed: bool,
     support_unsigned: bool,
 }
 impl UnaryOp {
-    fn new(name: &'static str, range_op: fn(&IntInterval) -> ArithResult) -> Self {
+    fn new(name: &'static str, range_op: fn(&IInterval) -> ArithResult) -> Self {
         Self {
             name,
             range_op,
@@ -163,7 +163,7 @@ impl UnaryOp {
 
         self.snapshot_with(&data);
     }
-    fn snapshot_with(&self, inputs: &[&[IntInterval]]) {
+    fn snapshot_with(&self, inputs: &[&[IInterval]]) {
         let mut snapshot = format!("# {}\n\n", self.name);
 
         for ranges in inputs {
@@ -184,13 +184,13 @@ impl UnaryOp {
 
 struct BinaryOp {
     name: &'static str,
-    range_op: fn(&IntInterval, &IntInterval) -> ArithResult,
+    range_op: fn(&IInterval, &IInterval) -> ArithResult,
     support_signed: bool,
     support_unsigned: bool,
     commutative: bool,
 }
 impl BinaryOp {
-    fn new(name: &'static str, range_op: fn(&IntInterval, &IntInterval) -> ArithResult) -> Self {
+    fn new(name: &'static str, range_op: fn(&IInterval, &IInterval) -> ArithResult) -> Self {
         Self {
             name,
             range_op,
@@ -227,7 +227,7 @@ impl BinaryOp {
 
         self.snapshot_with(&data);
     }
-    fn snapshot_with(&self, inputs: &[(&[IntInterval], &[IntInterval])]) {
+    fn snapshot_with(&self, inputs: &[(&[IInterval], &[IInterval])]) {
         let mut snapshot = format!("# {}\n\n", self.name);
 
         for &(lhs_ranges, rhs_ranges) in inputs {

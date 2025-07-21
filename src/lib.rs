@@ -1,4 +1,5 @@
 mod arithmetic;
+mod bits;
 mod iinterval;
 
 pub use arithmetic::*;
