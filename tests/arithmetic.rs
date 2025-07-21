@@ -428,6 +428,12 @@ fn test_wrapping_abs() {
     test_unary_signed!(op, |x| Some(x.wrapping_abs()));
     op.snapshot();
 }
+#[test]
+fn test_unsigned_abs() {
+    let op = unary!(Arithmetic::unsigned_abs).only_signed();
+    test_unary_signed!(op, |x| Some(x.unsigned_abs()));
+    op.snapshot();
+}
 
 #[test]
 fn test_min() {

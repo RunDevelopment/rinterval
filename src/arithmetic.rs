@@ -1125,18 +1125,45 @@ impl Arithmetic {
                 // This is the same strict_abs, but with different handling of
                 // the case where x_min == t_min.
 
-                let (x_min, x_max) = x.as_signed();
+                let strict = Self::strict_abs(x)?;
+
+                let (x_min, _) = x.as_signed();
 
                 if x_min == t_min {
                     let min_range = IInterval::single_signed(x.ty, t_min);
 
-                    if x_max == t_min {
-                        Ok(min_range)
-                    } else {
-                        Ok(min_range.hull(&Self::strict_abs(x)?))
-                    }
+                    Ok(strict.hull(&min_range))
                 } else {
-                    Self::strict_abs(x)
+                    Ok(strict)
+                }
+            }
+            IntTypeInfo::Unsigned(_) => Err(ArithError::Unsupported),
+        }
+    }
+    /// Absolute value which never overflows, because it returns an unsigned value.
+    pub fn unsigned_abs(x: &IInterval) -> ArithResult {
+        match x.ty.info() {
+            IntTypeInfo::Signed(t_min, t_max) => {
+                debug_assert_eq!(t_min, -t_max - 1);
+
+                if x.is_empty() {
+                    return Ok(IInterval::empty(x.ty.swap_signedness()));
+                }
+
+                // This is the same strict_abs, but with different handling of
+                // the case where x_min == t_min.
+
+                let strict = Self::strict_abs(x)?.cast_signed_to_unsigned();
+
+                let (x_min, _) = x.as_signed();
+
+                if x_min == t_min {
+                    let would_overflow =
+                        IInterval::single_unsigned(x.ty.swap_signedness(), t_max as u128 + 1);
+
+                    Ok(strict.hull(&would_overflow))
+                } else {
+                    Ok(strict)
                 }
             }
             IntTypeInfo::Unsigned(_) => Err(ArithError::Unsupported),
