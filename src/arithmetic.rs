@@ -853,6 +853,33 @@ impl Arithmetic {
         }
     }
 
+    /// Division which rounds towards positive infinity and panics on rhs == 0.
+    pub fn div_ceil(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
+        let ty = check_same_ty(lhs, rhs)?;
+        check_non_empty!(lhs, rhs);
+
+        match ty.info() {
+            IntTypeInfo::Signed(_, _) => Err(ArithError::Unsupported),
+            IntTypeInfo::Unsigned(_) => {
+                let (l_min, l_max) = lhs.as_unsigned();
+                let (mut r_min, r_max) = rhs.as_unsigned();
+
+                if r_max == 0 {
+                    // always div by 0
+                    return Ok(IInterval::empty(ty));
+                }
+                if r_min == 0 {
+                    r_min = 1;
+                }
+
+                let min = l_min.div_ceil(r_max);
+                let max = l_max.div_ceil(r_min);
+
+                Ok(IInterval::new_unsigned(ty, min, max))
+            }
+        }
+    }
+
     /// Remainder which panics on overflow and rhs == 0.
     pub fn strict_rem(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;

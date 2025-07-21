@@ -394,6 +394,17 @@ fn test_wrapping_div() {
 }
 
 #[test]
+fn test_div_ceil() {
+    let op = binary!(Arithmetic::div_ceil).only_unsigned();
+    test_binary_unsigned!(op, |lhs, rhs| if rhs == 0 {
+        None
+    } else {
+        Some(lhs.div_ceil(rhs))
+    });
+    op.snapshot();
+}
+
+#[test]
 fn test_strict_rem() {
     let op = binary!(Arithmetic::strict_rem);
     test_binary_all!(op, |lhs, rhs| lhs.checked_rem(rhs));
