@@ -148,6 +148,13 @@ impl Arithmetic {
             Self::wrapping_shl(value, shift)
         }
     }
+    pub fn shr(&self, value: &IInterval, shift: &IInterval) -> ArithResult {
+        if self.checked {
+            Self::strict_shr(value, shift)
+        } else {
+            Self::wrapping_shr(value, shift)
+        }
+    }
 
     /// Addition which saturates on overflow.
     pub fn saturating_add(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
