@@ -452,3 +452,40 @@ fn test_cast_unsigned() {
     test_unary_signed!(op, |x| Some(x.cast_unsigned()));
     op.snapshot();
 }
+
+#[test]
+fn test_leading_ones() {
+    let op = unary!(Arithmetic::leading_ones);
+    test_unary_all!(op, |x| Some(x.leading_ones()));
+    op.snapshot();
+}
+#[test]
+fn test_leading_zeros() {
+    let op = unary!(Arithmetic::leading_zeros);
+    test_unary_all!(op, |x| Some(x.leading_zeros()));
+    op.snapshot();
+}
+#[test]
+fn test_trailing_ones() {
+    let op = unary!(Arithmetic::trailing_ones);
+    test_unary_all!(op, |x| Some(x.trailing_ones()));
+    op.snapshot();
+}
+#[test]
+fn test_trailing_zeros() {
+    let op = unary!(Arithmetic::trailing_zeros);
+    test_unary_all!(op, |x| Some(x.trailing_zeros()));
+    op.snapshot();
+}
+#[test]
+fn test_count_ones() {
+    let op = unary!(Arithmetic::count_ones);
+    test_unary_all!(op, |x| Some(x.count_ones()));
+    op.snapshot();
+}
+#[test]
+fn test_count_zeros() {
+    let op = unary!(Arithmetic::count_zeros);
+    test_unary_all!(op, |x| Some(x.count_zeros()));
+    op.snapshot();
+}

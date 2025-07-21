@@ -45,6 +45,33 @@ fn range_4(ty: IntType, values: [i128; 4]) -> IntInterval {
     IntInterval::new_signed(ty, min_4(&values), max_4(&values))
 }
 
+/// Splits the interval by the sign bit of its values. The given function will
+/// called with the min and max values of unsigned intervals.
+///
+/// E.g. `f` will be called with `(1, 10)` for the interval `[1, 10]` and with
+/// `(0, 5), (u128::MAX-4, u128::MAX)` for the interval `[-5, 5]`.
+fn split_by_sign_bit(i: &IntInterval, mut f: impl FnMut(u128, u128) -> IntInterval) -> IntInterval {
+    debug_assert!(!i.is_empty());
+
+    if i.ty.is_signed() {
+        let (min, max) = i.as_signed();
+
+        if min < 0 {
+            let min_range = f(min.cast_unsigned(), max.min(-1).cast_unsigned());
+            if max >= 0 {
+                min_range.hull(&f(min.max(0).cast_unsigned(), max.cast_unsigned()))
+            } else {
+                min_range
+            }
+        } else {
+            f(min.cast_unsigned(), max.cast_unsigned())
+        }
+    } else {
+        let (min, max) = i.as_unsigned();
+        f(min, max)
+    }
+}
+
 pub struct Arithmetic {
     /// If `true`, checked arithmetic will be assumed.
     ///
@@ -1268,6 +1295,96 @@ impl Arithmetic {
                 ))
             }
         }
+    }
+
+    pub fn leading_zeros(x: &IntInterval) -> ArithResult {
+        if x.is_empty() {
+            return Ok(IntInterval::empty(IntType::U32));
+        }
+
+        let bit_width = x.ty.bits() as u32;
+        let padding = 128 - bit_width;
+
+        Ok(split_by_sign_bit(x, |min, max| {
+            let r_min = max.leading_zeros().saturating_sub(padding);
+            let r_max = min.leading_zeros().saturating_sub(padding);
+
+            IntInterval::new_unsigned(IntType::U32, r_min as u128, r_max as u128)
+        }))
+    }
+    pub fn leading_ones(x: &IntInterval) -> ArithResult {
+        Self::leading_zeros(&Self::not(x)?)
+    }
+    pub fn trailing_zeros(x: &IntInterval) -> ArithResult {
+        if x.is_empty() {
+            return Ok(IntInterval::empty(IntType::U32));
+        }
+
+        let bit_width = x.ty.bits() as u32;
+
+        Ok(split_by_sign_bit(x, |min, max| {
+            if min == max {
+                let trailing = min.trailing_zeros().min(bit_width);
+                return IntInterval::single_unsigned(IntType::U32, trailing as u128);
+            }
+
+            // if min != max, then the range contains at least one odd value,
+            // so the minimum trailing zeros is 0
+
+            if min == 0 {
+                // 0 is all 0s
+                return IntInterval::new_unsigned(IntType::U32, 0, bit_width as u128);
+            }
+
+            let mut a = min;
+            let mut b = max & !1; // make sure max isn't u128::MAX
+
+            let mut scale: u32 = 0;
+            while a != b {
+                scale += 1;
+                a = (a + 1) >> 1;
+                b >>= 1;
+            }
+
+            let most_even = a << scale;
+
+            let r_max = most_even.trailing_zeros();
+
+            IntInterval::new_unsigned(IntType::U32, 0, r_max as u128)
+        }))
+    }
+    pub fn trailing_ones(x: &IntInterval) -> ArithResult {
+        Self::trailing_zeros(&Self::not(x)?)
+    }
+    pub fn count_ones(x: &IntInterval) -> ArithResult {
+        if x.is_empty() {
+            return Ok(IntInterval::empty(IntType::U32));
+        }
+
+        let bit_width = x.ty.bits() as u32;
+
+        Ok(split_by_sign_bit(x, |min, max| {
+            let equal_prefix = (min ^ max).leading_zeros();
+            let mut spread = 128 - equal_prefix;
+
+            let mask = u128::MAX.unbounded_shl(bit_width);
+            let fixed_ones = (min & !mask).unbounded_shr(spread).count_ones();
+
+            let r_min = if min == 0 { 0 } else { 1 };
+
+            if max | u128::MAX.unbounded_shl(spread) != u128::MAX {
+                spread -= 1;
+            }
+
+            IntInterval::new_unsigned(
+                IntType::U32,
+                fixed_ones.min(bit_width).max(r_min) as u128,
+                (fixed_ones + spread).min(bit_width) as u128,
+            )
+        }))
+    }
+    pub fn count_zeros(x: &IntInterval) -> ArithResult {
+        Self::count_ones(&Self::not(x)?)
     }
 
     /// Casts unsigned to signed.
