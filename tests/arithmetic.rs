@@ -1,4 +1,4 @@
-use rinterval::{ArithResult, Arithmetic, IInterval};
+use rinterval::*;
 
 mod data;
 mod snapshot;
@@ -514,19 +514,6 @@ fn test_unbounded_shr() {
 }
 
 #[test]
-fn test_cast_signed() {
-    let op = unary!(Arithmetic::cast_signed).only_unsigned();
-    test_unary_unsigned!(op, |x| Some(x.cast_signed()));
-    op.snapshot();
-}
-#[test]
-fn test_cast_unsigned() {
-    let op = unary!(Arithmetic::cast_unsigned).only_signed();
-    test_unary_signed!(op, |x| Some(x.cast_unsigned()));
-    op.snapshot();
-}
-
-#[test]
 fn test_leading_ones() {
     let op = unary!(Arithmetic::leading_ones);
     test_unary_all!(op, |x| Some(x.leading_ones()));
@@ -562,3 +549,39 @@ fn test_count_zeros() {
     test_unary_all!(op, |x| Some(x.count_zeros()));
     op.snapshot();
 }
+
+#[test]
+fn test_cast_signed() {
+    let op = unary!(Arithmetic::cast_signed).only_unsigned();
+    test_unary_unsigned!(op, |x| Some(x.cast_signed()));
+    op.snapshot();
+}
+#[test]
+fn test_cast_unsigned() {
+    let op = unary!(Arithmetic::cast_unsigned).only_signed();
+    test_unary_signed!(op, |x| Some(x.cast_unsigned()));
+    op.snapshot();
+}
+
+macro_rules! test_case_as {
+    ($name:ident, $t:ty) => {
+        #[test]
+        fn $name() {
+            let mut op = unary!(|x| Arithmetic::cast_as(x, <$t>::get_type()));
+            op.name = concat!("cast_as ", stringify!($t));
+            test_unary_all!(op, |x| Some(x as $t));
+            op.snapshot();
+        }
+    };
+}
+
+test_case_as!(test_cast_as_i8, i8);
+test_case_as!(test_cast_as_i16, i16);
+test_case_as!(test_cast_as_i32, i32);
+test_case_as!(test_cast_as_i64, i64);
+test_case_as!(test_cast_as_i128, i128);
+test_case_as!(test_cast_as_u8, u8);
+test_case_as!(test_cast_as_u16, u16);
+test_case_as!(test_cast_as_u32, u32);
+test_case_as!(test_cast_as_u64, u64);
+test_case_as!(test_cast_as_u128, u128);

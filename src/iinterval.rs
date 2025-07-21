@@ -272,12 +272,14 @@ impl IInterval {
 
     /// Casts an unsigned interval to a signed one of a type with the same bit width.
     ///
-    /// If the interval is empty or the type is signed, the result is unspecified.
+    /// If the type is already signed, the result is unspecified.
     pub(crate) const fn cast_unsigned_to_signed(&self) -> Self {
         debug_assert!(!self.ty.is_signed());
-        debug_assert!(!self.is_empty());
 
         let target = self.ty.swap_signedness();
+        if self.is_empty() {
+            return Self::empty(target);
+        }
 
         let t_max = target.max_value().cast_unsigned();
         let (x_min, x_max) = self.as_unsigned();
@@ -296,12 +298,14 @@ impl IInterval {
     }
     /// Casts a signed interval to an unsigned one of a type with the same bit width.
     ///
-    /// If the interval is empty or the type is unsigned, the result is unspecified.
+    /// If the type is already unsigned, the result is unspecified.
     pub(crate) const fn cast_signed_to_unsigned(&self) -> Self {
         debug_assert!(self.ty.is_signed());
-        debug_assert!(!self.is_empty());
 
         let target = self.ty.swap_signedness();
+        if self.is_empty() {
+            return Self::empty(target);
+        }
 
         let t_max = target.max_value().cast_unsigned();
         let (x_min, x_max) = self.as_signed();
@@ -317,6 +321,18 @@ impl IInterval {
         } else {
             IInterval::new_unsigned(target, self.min.cast_unsigned(), self.max.cast_unsigned())
         }
+    }
+    /// Casts an interval to a different wider type of the same signedness.
+    ///
+    /// If the signedness of the target type is different or the target type is
+    /// narrower, the result is unspecified.
+    pub(crate) fn cast_widen(&self, target: IntType) -> Self {
+        debug_assert!(self.ty.is_signed() == target.is_signed());
+        debug_assert!(self.ty.bits() <= target.bits());
+
+        let mut result = self.clone();
+        result.ty = target;
+        result
     }
 }
 

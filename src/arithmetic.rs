@@ -1633,10 +1633,6 @@ impl Arithmetic {
             return Err(ArithError::Unsupported);
         }
 
-        if x.is_empty() {
-            return Ok(IInterval::empty(x.ty.swap_signedness()));
-        }
-
         Ok(x.cast_unsigned_to_signed())
     }
     /// Casts signed to unsigned.
@@ -1645,10 +1641,84 @@ impl Arithmetic {
             return Err(ArithError::Unsupported);
         }
 
+        Ok(x.cast_signed_to_unsigned())
+    }
+
+    pub fn cast_as(x: &IInterval, target: IntType) -> ArithResult {
+        if x.ty == target {
+            return Ok(x.clone());
+        }
         if x.is_empty() {
-            return Ok(IInterval::empty(x.ty.swap_signedness()));
+            return Ok(IInterval::empty(target));
         }
 
-        Ok(x.cast_signed_to_unsigned())
+        let src_width = x.ty.bits();
+        let target_width = target.bits();
+        let src_signed = x.ty.is_signed();
+        let target_signed = target.is_signed();
+
+        let target_same_sign = if src_signed != target_signed {
+            target.swap_signedness()
+        } else {
+            target
+        };
+
+        let src: IInterval = if src_width < target_width {
+            // widening cast
+            x.cast_widen(target_same_sign)
+        } else if src_width > target_width {
+            // narrowing cast
+            match target_same_sign.info() {
+                IntTypeInfo::Signed(t_min, t_max) => {
+                    let mask = (t_max.cast_unsigned() << 1) | 1;
+                    split_by_sign_bit(x, |min, max| {
+                        if max - min >= mask {
+                            IInterval::new_signed(target_same_sign, t_min, t_max)
+                        } else {
+                            let min = min & mask;
+                            let max = max & mask;
+                            if min > max {
+                                IInterval::new_signed(target_same_sign, t_min, t_max)
+                            } else {
+                                let unsigned = target_same_sign.swap_signedness();
+                                IInterval::new_unsigned(unsigned, min, max)
+                                    .cast_unsigned_to_signed()
+                            }
+                        }
+                    })
+                }
+                IntTypeInfo::Unsigned(t_max) => {
+                    let (s_min, s_max) = x.as_unsigned();
+
+                    if s_max - s_min >= t_max {
+                        IInterval::new_unsigned(target_same_sign, 0, t_max)
+                    } else {
+                        let min = s_min & t_max;
+                        let max = s_max & t_max;
+                        if min > max {
+                            IInterval::new_unsigned(target_same_sign, 0, t_max)
+                        } else {
+                            IInterval::new_unsigned(target_same_sign, min, max)
+                        }
+                    }
+                }
+            }
+        } else {
+            // only signedness cast
+            x.clone()
+        };
+
+        // cast to target signedness
+        let result = if src_signed != target_signed {
+            if target_signed {
+                src.cast_unsigned_to_signed()
+            } else {
+                src.cast_signed_to_unsigned()
+            }
+        } else {
+            src
+        };
+
+        Ok(result)
     }
 }
