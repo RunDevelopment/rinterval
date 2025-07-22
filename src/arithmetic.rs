@@ -28,12 +28,19 @@ macro_rules! check_non_empty {
     };
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 enum Overflow {
     None,
     Under,
     Over,
 }
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SignBit {
+    NonNeg = 1,
+    Neg = -1,
+}
+
 fn min_4(values: &[i128; 4]) -> i128 {
     values[0].min(values[1]).min(values[2]).min(values[3])
 }
@@ -57,11 +64,11 @@ fn split_by_sign_bit(i: &IInterval, mut f: impl FnMut(u128, u128) -> IInterval) 
         let (min, max) = i.as_signed();
 
         if min < 0 {
-            let min_range = f(min.cast_unsigned(), max.min(-1).cast_unsigned());
             if max >= 0 {
-                min_range.hull(&f(min.max(0).cast_unsigned(), max.cast_unsigned()))
+                f(min.cast_unsigned(), u128::MAX)
+                    .hull(&f(min.max(0).cast_unsigned(), max.cast_unsigned()))
             } else {
-                min_range
+                f(min.cast_unsigned(), max.cast_unsigned())
             }
         } else {
             f(min.cast_unsigned(), max.cast_unsigned())
@@ -69,6 +76,26 @@ fn split_by_sign_bit(i: &IInterval, mut f: impl FnMut(u128, u128) -> IInterval) 
     } else {
         let (min, max) = i.as_unsigned();
         f(min, max)
+    }
+}
+/// Same as `split_by_sign_bit`, but only for signed intervals.
+fn split_by_sign_bit_signed(
+    i: &IInterval,
+    mut f: impl FnMut(i128, i128, SignBit) -> IInterval,
+) -> IInterval {
+    debug_assert!(!i.is_empty());
+    debug_assert!(i.ty.is_signed());
+
+    let (min, max) = i.as_signed();
+
+    if min < 0 {
+        if max >= 0 {
+            f(min, -1, SignBit::Neg).hull(&f(min.max(0), max, SignBit::NonNeg))
+        } else {
+            f(min, max, SignBit::Neg)
+        }
+    } else {
+        f(min, max, SignBit::NonNeg)
     }
 }
 
@@ -132,6 +159,13 @@ impl Arithmetic {
             Self::strict_rem(left, right)
         } else {
             Self::wrapping_rem(left, right)
+        }
+    }
+    pub fn rem_euclid(&self, left: &IInterval, right: &IInterval) -> ArithResult {
+        if self.checked {
+            Self::strict_rem_euclid(left, right)
+        } else {
+            Self::wrapping_rem_euclid(left, right)
         }
     }
     pub fn abs(&self, value: &IInterval) -> ArithResult {
@@ -553,30 +587,24 @@ impl Arithmetic {
                 let (l_min, l_max) = lhs.as_signed();
                 let (r_min, r_max) = rhs.as_signed();
 
-                #[derive(Clone, Copy, PartialEq, Eq)]
-                enum Sign {
-                    Positive = 1,
-                    Negative = -1,
-                }
-
                 let quadrant = |mut l_min: i128,
                                 mut l_max: i128,
-                                mut l_sign: Sign,
+                                mut l_sign: SignBit,
                                 mut r_min: i128,
                                 mut r_max: i128,
-                                mut r_sign: Sign|
+                                mut r_sign: SignBit|
                  -> IInterval {
                     debug_assert!(l_min > 0 || l_max < 0);
                     debug_assert!(r_min > 0 || r_max < 0);
 
-                    if l_sign == Sign::Positive && r_sign == Sign::Negative {
+                    if l_sign == SignBit::NonNeg && r_sign == SignBit::Neg {
                         std::mem::swap(&mut l_min, &mut r_min);
                         std::mem::swap(&mut l_max, &mut r_max);
                         std::mem::swap(&mut l_sign, &mut r_sign);
                     }
 
                     match (l_sign, r_sign) {
-                        (Sign::Positive, Sign::Positive) => {
+                        (SignBit::NonNeg, SignBit::NonNeg) => {
                             // both positive
                             let (min, min_overflow) = l_min.overflowing_mul(r_min);
                             if min_overflow || min > t_max {
@@ -585,8 +613,8 @@ impl Arithmetic {
                             }
                             IInterval::new_signed(ty, min, l_max.saturating_mul(r_max).min(t_max))
                         }
-                        (Sign::Positive, Sign::Negative) => unreachable!(),
-                        (Sign::Negative, Sign::Positive) => {
+                        (SignBit::NonNeg, SignBit::Neg) => unreachable!(),
+                        (SignBit::Neg, SignBit::NonNeg) => {
                             // lhs negative, rhs positive
                             // both positive
                             let (max, max_overflow) = l_max.overflowing_mul(r_min);
@@ -596,7 +624,7 @@ impl Arithmetic {
                             }
                             IInterval::new_signed(ty, l_min.saturating_mul(r_max).max(t_min), max)
                         }
-                        (Sign::Negative, Sign::Negative) => {
+                        (SignBit::Neg, SignBit::Neg) => {
                             // both negative
                             let (min, min_overflow) = l_max.overflowing_mul(r_max);
                             if min_overflow || min > t_max {
@@ -612,7 +640,7 @@ impl Arithmetic {
                     }
                 };
 
-                let split_l = |r_min: i128, r_max: i128, r_sign: Sign| -> IInterval {
+                let split_l = |r_min: i128, r_max: i128, r_sign: SignBit| -> IInterval {
                     debug_assert!(r_min > 0 || r_max < 0);
 
                     let mut result = IInterval::empty(ty);
@@ -621,7 +649,7 @@ impl Arithmetic {
                         result = result.hull(&quadrant(
                             l_min,
                             l_max.min(-1),
-                            Sign::Negative,
+                            SignBit::Neg,
                             r_min,
                             r_max,
                             r_sign,
@@ -634,7 +662,7 @@ impl Arithmetic {
                         result = result.hull(&quadrant(
                             l_min.max(1),
                             l_max,
-                            Sign::Positive,
+                            SignBit::NonNeg,
                             r_min,
                             r_max,
                             r_sign,
@@ -647,13 +675,13 @@ impl Arithmetic {
                 let mut result = IInterval::empty(ty);
 
                 if r_min < 0 {
-                    result = result.hull(&split_l(r_min, r_max.min(-1), Sign::Negative));
+                    result = result.hull(&split_l(r_min, r_max.min(-1), SignBit::Neg));
                 }
                 if r_min <= 0 && 0 <= r_max {
                     result = result.hull(&IInterval::single_signed(ty, 0));
                 }
                 if r_max > 0 {
-                    result = result.hull(&split_l(r_min.max(1), r_max, Sign::Positive));
+                    result = result.hull(&split_l(r_min.max(1), r_max, SignBit::NonNeg));
                 }
 
                 Ok(result)
@@ -853,6 +881,57 @@ impl Arithmetic {
         }
     }
 
+    /// Division which panics on overflow and rhs == 0.
+    pub fn strict_div_euclid(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
+        let ty = check_same_ty(lhs, rhs)?;
+        check_non_empty!(lhs, rhs);
+
+        match ty.info() {
+            IntTypeInfo::Signed(t_min, t_max) => {
+                debug_assert_eq!(t_min, -t_max - 1);
+
+                // TODO: implement this properly
+
+                let (l_min, _) = lhs.as_signed();
+                let (r_min, _) = rhs.as_signed();
+
+                if l_min >= 0 && r_min >= 0 {
+                    // both positive
+                    return Self::strict_div(lhs, rhs);
+                }
+
+                Ok(IInterval::full(ty))
+            }
+            IntTypeInfo::Unsigned(_) => Self::strict_div(lhs, rhs),
+        }
+    }
+    /// Division which wrap on overflow and panics on rhs == 0.
+    pub fn wrapping_div_euclid(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
+        let ty = check_same_ty(lhs, rhs)?;
+        check_non_empty!(lhs, rhs);
+
+        match ty.info() {
+            IntTypeInfo::Signed(t_min, _) => {
+                // the only difference between wrapping_div_euclid and
+                // strict_div_euclid is the case t_min / -1
+
+                let strict = Self::strict_div_euclid(lhs, rhs)?;
+
+                let (l_min, _) = lhs.as_signed();
+                let (r_min, r_max) = rhs.as_signed();
+
+                if l_min == t_min && r_min <= -1 && -1 <= r_max {
+                    // t_min / -1 will overflow, so we have to add t_min to the result
+                    Ok(IInterval::single_signed(ty, t_min).hull(&strict))
+                } else {
+                    Ok(strict)
+                }
+            }
+            // same as strict_div for unsigned types
+            IntTypeInfo::Unsigned(_) => Self::strict_div(lhs, rhs),
+        }
+    }
+
     /// Division which rounds towards positive infinity and panics on rhs == 0.
     pub fn div_ceil(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
@@ -874,33 +953,6 @@ impl Arithmetic {
 
                 let min = l_min.div_ceil(r_max);
                 let max = l_max.div_ceil(r_min);
-
-                Ok(IInterval::new_unsigned(ty, min, max))
-            }
-        }
-    }
-
-    /// Midpoint.
-    pub fn midpoint(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
-        let ty = check_same_ty(lhs, rhs)?;
-        check_non_empty!(lhs, rhs);
-
-        match ty.info() {
-            IntTypeInfo::Signed(_, _) => {
-                let (l_min, l_max) = lhs.as_signed();
-                let (r_min, r_max) = rhs.as_signed();
-
-                let min = l_min.midpoint(r_min);
-                let max = l_max.midpoint(r_max);
-
-                Ok(IInterval::new_signed(ty, min, max))
-            }
-            IntTypeInfo::Unsigned(_) => {
-                let (l_min, l_max) = lhs.as_unsigned();
-                let (r_min, r_max) = rhs.as_unsigned();
-
-                let min = l_min.midpoint(r_min);
-                let max = l_max.midpoint(r_max);
 
                 Ok(IInterval::new_unsigned(ty, min, max))
             }
@@ -1101,6 +1153,490 @@ impl Arithmetic {
             }
             // same as strict_div for unsigned types
             IntTypeInfo::Unsigned(_) => Self::strict_rem(lhs, rhs),
+        }
+    }
+
+    /// Modulo which panics on overflow and rhs == 0.
+    pub fn strict_rem_euclid(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
+        let ty = check_same_ty(lhs, rhs)?;
+        check_non_empty!(lhs, rhs);
+
+        match ty.info() {
+            IntTypeInfo::Signed(t_min, t_max) => {
+                debug_assert_eq!(t_min, -t_max - 1);
+
+                let (mut r_min, mut r_max) = rhs.as_signed();
+
+                // Okay, so modulo is a pain to implement, because the
+                // operation works as follows:
+                // 1. If rhs == 0, panic.
+                // 2. If rhs == -1 and lhs == t_min, panic.
+                // 3. Return lhs mod abs(rhs)
+                // Note that abs(rhs) can overflow.
+
+                let mut result = IInterval::empty(ty);
+
+                // handle rhs == t_min separately
+                if r_min == t_min {
+                    let min_range = split_by_sign_bit_signed(lhs, |min, max, sign| {
+                        if sign == SignBit::Neg {
+                            IInterval::new_signed(ty, min - t_min, max - t_min)
+                        } else {
+                            IInterval::new_signed(ty, min, max)
+                        }
+                    });
+
+                    if r_max == t_min {
+                        return Ok(min_range);
+                    }
+
+                    result = min_range;
+                    r_min += 1;
+                    // this case is handled now, which means we can now safely
+                    // compute -r_min and -r_max
+                }
+
+                debug_assert!(
+                    r_min <= r_max && r_max <= t_max,
+                    "Invalid rhs: [{r_min}, {r_max}] for type {ty:?}"
+                );
+
+                // Very annoyingly, t_min (mod -1) panics. Since all operations
+                // only guarantee to result a superset, I will just ignore this
+                // panic and pretend that lhs (mod -1) == lhs (mod 1).
+                // With that out of the way, calculate abs(rhs)
+                if r_max < 0 {
+                    (r_min, r_max) = (-r_max, -r_min);
+                } else if r_min < 0 {
+                    (r_min, r_max) = (0, r_max.max(-r_min));
+                }
+
+                if r_min == 0 {
+                    // rhs=0 always panics, so ignore it
+                    if r_max == 0 {
+                        debug_assert!(result.is_empty());
+                        return Ok(IInterval::empty(ty));
+                    }
+                    r_min = 1; // to avoid division by zero
+                }
+
+                debug_assert!(
+                    0 < r_min && r_min <= r_max && r_max <= t_max,
+                    "Invalid rhs: [{r_min}, {r_max}] for type {ty:?}"
+                );
+
+                // now the general case, aka the bulk of the function
+                let general = split_by_sign_bit_signed(lhs, |l_min, l_max, sign| {
+                    if r_min == r_max {
+                        // if the rhs is a single value, this is possible
+                        // if the lhs as more or equal values than the rhs, then the
+                        // result is the trivial range [0, r - 1], which isn't
+                        // interesting
+                        if l_max - l_min < r_min {
+                            let min = l_min.rem_euclid(r_min);
+                            let max = l_max.rem_euclid(r_min);
+                            if min <= max {
+                                return IInterval::new_signed(ty, min, max);
+                            }
+                        }
+                        return IInterval::new_signed(ty, 0, r_max - 1);
+                    }
+
+                    if sign == SignBit::NonNeg && l_max < r_min {
+                        // Since 0 <= lhs <= rhs, lhs (mod rhs) == lhs
+                        return IInterval::new_signed(ty, l_min, l_max);
+                    }
+
+                    if sign == SignBit::NonNeg {
+                        return IInterval::new_signed(ty, 0, l_max.min(r_max - 1));
+                    }
+
+                    IInterval::new_signed(ty, 0, r_max - 1)
+                });
+
+                Ok(result.hull(&general))
+            }
+            // same as strict_rem for unsigned types
+            IntTypeInfo::Unsigned(_) => Self::strict_rem(lhs, rhs),
+        }
+    }
+    /// Modulo which wrap on overflow and panics on rhs == 0.
+    pub fn wrapping_rem_euclid(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
+        let ty = check_same_ty(lhs, rhs)?;
+        check_non_empty!(lhs, rhs);
+
+        match ty.info() {
+            IntTypeInfo::Signed(t_min, _) => {
+                // the only difference between wrapping_rem and strict_rem is
+                // the case t_min % -1
+
+                let strict = Self::strict_rem_euclid(lhs, rhs)?;
+
+                let (l_min, _) = lhs.as_signed();
+                let (r_min, r_max) = rhs.as_signed();
+
+                if l_min == t_min && r_min <= -1 && -1 <= r_max {
+                    // t_min % -1 == 0 when wrapping
+                    Ok(IInterval::single_signed(ty, 0).hull(&strict))
+                } else {
+                    Ok(strict)
+                }
+            }
+            // same as strict_rem for unsigned types
+            IntTypeInfo::Unsigned(_) => Self::strict_rem(lhs, rhs),
+        }
+    }
+
+    /// Midpoint.
+    pub fn midpoint(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
+        let ty = check_same_ty(lhs, rhs)?;
+        check_non_empty!(lhs, rhs);
+
+        match ty.info() {
+            IntTypeInfo::Signed(_, _) => {
+                let (l_min, l_max) = lhs.as_signed();
+                let (r_min, r_max) = rhs.as_signed();
+
+                let min = l_min.midpoint(r_min);
+                let max = l_max.midpoint(r_max);
+
+                Ok(IInterval::new_signed(ty, min, max))
+            }
+            IntTypeInfo::Unsigned(_) => {
+                let (l_min, l_max) = lhs.as_unsigned();
+                let (r_min, r_max) = rhs.as_unsigned();
+
+                let min = l_min.midpoint(r_min);
+                let max = l_max.midpoint(r_max);
+
+                Ok(IInterval::new_unsigned(ty, min, max))
+            }
+        }
+    }
+
+    /// Integer square root, which panics for negative values.
+    pub fn isqrt(x: &IInterval) -> ArithResult {
+        check_non_empty!(x);
+
+        let ty = x.ty;
+
+        match ty.info() {
+            IntTypeInfo::Signed(_, _) => {
+                let (mut x_min, x_max) = x.as_signed();
+                if x_max < 0 {
+                    return Ok(IInterval::empty(ty));
+                }
+                if x_min < 0 {
+                    x_min = 0; // ignore negative values
+                }
+
+                let min = x_min.isqrt();
+                let max = x_max.isqrt();
+
+                Ok(IInterval::new_signed(ty, min, max))
+            }
+            IntTypeInfo::Unsigned(_) => {
+                let (x_min, x_max) = x.as_unsigned();
+
+                let min = x_min.isqrt();
+                let max = x_max.isqrt();
+
+                Ok(IInterval::new_unsigned(ty, min, max))
+            }
+        }
+    }
+
+    /// Power which saturates on overflow.
+    pub fn saturating_pow(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
+        if rhs.ty != IntType::U32 {
+            return Err(ArithError::TypeError);
+        }
+
+        let ty = lhs.ty;
+        check_non_empty!(lhs, rhs);
+
+        let (r_min, r_max) = rhs.as_unsigned();
+        let (r_min, r_max) = (r_min as u32, r_max as u32);
+
+        match ty.info() {
+            IntTypeInfo::Signed(t_min, t_max) => {
+                let (l_min, l_max) = lhs.as_signed();
+                let l_has_zero = l_min <= 0 && 0 <= l_max;
+
+                let single_r = |r: u32| -> IInterval {
+                    if r == 0 {
+                        // x^0 == 1, so return [1, 1]
+                        return IInterval::single_signed(ty, 1);
+                    }
+
+                    if r % 2 == 0 {
+                        // exponent is even
+                        let pow_min = l_min.saturating_pow(r).min(t_max);
+                        let pow_max = l_max.saturating_pow(r).min(t_max);
+
+                        let max = pow_min.max(pow_max);
+                        let min = if l_has_zero { 0 } else { pow_min.min(pow_max) };
+
+                        IInterval::new_signed(ty, min, max)
+                    } else {
+                        IInterval::new_signed(
+                            ty,
+                            l_min.saturating_pow(r).clamp(t_min, t_max),
+                            l_max.saturating_pow(r).clamp(t_min, t_max),
+                        )
+                    }
+                };
+
+                if r_min == r_max {
+                    return Ok(single_r(r_min));
+                }
+
+                let mut result = single_r(r_min).hull(&single_r(r_max));
+
+                if r_min + 1 < r_max && l_min < 0 {
+                    result = result.hull(&single_r(r_min + 1));
+                    result = result.hull(&single_r(r_max - 1));
+                }
+
+                Ok(result)
+            }
+            IntTypeInfo::Unsigned(t_max) => {
+                let (l_min, l_max) = lhs.as_unsigned();
+
+                if r_max == 0 {
+                    // x^0 == 1, so return [1, 1]
+                    return Ok(IInterval::single_unsigned(ty, 1));
+                }
+                if l_max == 0 {
+                    if r_min == 0 {
+                        return Ok(IInterval::new_unsigned(ty, 0, 1));
+                    } else {
+                        return Ok(IInterval::single_unsigned(ty, 0));
+                    }
+                }
+
+                let min = if r_min == 0 && l_min == 0 {
+                    0
+                } else {
+                    l_min.saturating_pow(r_min).min(t_max)
+                };
+                let max = l_max.saturating_pow(r_max).min(t_max);
+
+                Ok(IInterval::new_unsigned(ty, min, max))
+            }
+        }
+    }
+    /// Power which panics on overflow.
+    pub fn strict_pow(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
+        if rhs.ty != IntType::U32 {
+            return Err(ArithError::TypeError);
+        }
+
+        let ty = lhs.ty;
+        check_non_empty!(lhs, rhs);
+
+        let (r_min, r_max) = rhs.as_unsigned();
+        let (mut r_min, r_max) = (r_min as u32, r_max as u32);
+
+        match ty.info() {
+            IntTypeInfo::Signed(t_min, t_max) => {
+                let (l_min, l_max) = lhs.as_signed();
+
+                let single_r = |r: u32| -> IInterval {
+                    if r == 0 {
+                        // x^0 == 1, so return [1, 1]
+                        return IInterval::single_signed(ty, 1);
+                    }
+
+                    if r % 2 == 0 {
+                        // exponent is even
+                        let (min_pow, mut min_overflow) = l_min.overflowing_pow(r);
+                        let (max_pow, mut max_overflow) = l_max.overflowing_pow(r);
+                        min_overflow |= min_pow > t_max;
+                        max_overflow |= max_pow > t_max;
+
+                        let has_zero = l_min <= 0 && 0 <= l_max;
+                        if has_zero {
+                            return if min_overflow || max_overflow {
+                                IInterval::new_signed(ty, 0, t_max)
+                            } else {
+                                IInterval::new_signed(ty, 0, min_pow.max(max_pow))
+                            };
+                        }
+
+                        if min_overflow && max_overflow {
+                            IInterval::empty(ty)
+                        } else if min_overflow {
+                            IInterval::new_signed(ty, max_pow, t_max)
+                        } else if max_overflow {
+                            IInterval::new_signed(ty, min_pow, t_max)
+                        } else {
+                            IInterval::new_signed(ty, min_pow.min(max_pow), max_pow.max(min_pow))
+                        }
+                    } else {
+                        // exponent is odd
+                        let (min_pow, min_overflow) = l_min.overflowing_pow(r);
+                        let (max_pow, max_overflow) = l_max.overflowing_pow(r);
+
+                        if l_min >= 0 {
+                            return if min_overflow || min_pow > t_max {
+                                IInterval::empty(ty)
+                            } else if max_overflow || max_pow > t_max {
+                                IInterval::new_signed(ty, min_pow, t_max)
+                            } else {
+                                IInterval::new_signed(ty, min_pow, max_pow)
+                            };
+                        }
+
+                        if l_max <= 0 {
+                            return if max_overflow || max_pow < t_min {
+                                IInterval::empty(ty)
+                            } else if min_overflow || min_pow < t_min {
+                                IInterval::new_signed(ty, t_min, max_pow)
+                            } else {
+                                IInterval::new_signed(ty, min_pow, max_pow)
+                            };
+                        }
+
+                        if min_overflow || min_pow < t_min {
+                            return if max_overflow || max_pow > t_max {
+                                IInterval::full(ty)
+                            } else {
+                                IInterval::new_signed(ty, t_min, max_pow)
+                            };
+                        }
+
+                        if max_overflow || max_pow > t_max {
+                            return IInterval::new_signed(ty, min_pow, t_max);
+                        }
+
+                        IInterval::new_signed(ty, min_pow, max_pow)
+                    }
+                };
+
+                let min_range = single_r(r_min);
+                if min_range.is_empty() || min_range.min == t_min && min_range.max == t_max {
+                    // if the min range is empty, then the result is empty
+                    // similarly, if the min range is the full range,
+                    // then the result is the full range
+                    return Ok(min_range);
+                }
+
+                if r_min == r_max {
+                    return Ok(min_range);
+                }
+
+                let mut result = min_range.hull(&single_r(r_min + 1));
+                drop(min_range);
+
+                if result.max == t_max && (result.min == t_min || l_min >= 0) {
+                    // the result won't change anymore
+                    return Ok(result);
+                }
+
+                if r_min + 1 == r_max {
+                    return Ok(result);
+                }
+
+                // find actual max
+                if result.max != t_max && l_max >= 0 {
+                    if let Some(max_pow) = l_max.checked_pow(r_max).filter(|i| i <= &t_max) {
+                        result.max = result.max.max(max_pow);
+                    } else {
+                        result.max = t_max;
+                    }
+                }
+                if result.max != t_max && l_min < 0 {
+                    // select the even integer in [r_max - 1, r_max]
+                    let r_even = r_max & !1;
+                    if let Some(min_pow) = l_min.checked_pow(r_even).filter(|i| i <= &t_max) {
+                        result.max = result.max.max(min_pow);
+                    } else {
+                        result.max = t_max;
+                    }
+                }
+
+                // find actual min
+                if result.min != t_min && l_min < 0 {
+                    // select the odd integer in [r_max - 1, r_max]
+                    let r_odd = (r_max - 1) | 1;
+                    if let Some(min_pow) = l_min.checked_pow(r_odd).filter(|i| i >= &t_min) {
+                        result.min = result.min.min(min_pow);
+                    } else {
+                        result.min = t_min;
+                    }
+                }
+
+                Ok(result)
+            }
+            IntTypeInfo::Unsigned(t_max) => {
+                let (l_min, l_max) = lhs.as_unsigned();
+
+                if r_max == 0 {
+                    // x^0 == 1, so return [1, 1]
+                    return Ok(IInterval::single_unsigned(ty, 1));
+                }
+
+                let r_zero = if r_min == 0 {
+                    r_min = 1;
+                    // x^0 == 1, so return [1, 1]
+                    IInterval::single_unsigned(ty, 1)
+                } else {
+                    IInterval::empty(ty)
+                };
+
+                let (min, min_overflow) = l_min.overflowing_pow(r_min);
+                if min_overflow || min > t_max {
+                    // it will always overflow
+                    return Ok(IInterval::empty(ty));
+                }
+                let max = l_max.saturating_pow(r_max).min(t_max);
+
+                Ok(IInterval::new_unsigned(ty, min, max).hull(&r_zero))
+            }
+        }
+    }
+    /// Pow which wraps on overflow.
+    pub fn wrapping_pow(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
+        if rhs.ty != IntType::U32 {
+            return Err(ArithError::TypeError);
+        }
+
+        let ty = lhs.ty;
+        check_non_empty!(lhs, rhs);
+
+        let (r_min, r_max) = rhs.as_unsigned();
+        let (_, r_max) = (r_min as u32, r_max as u32);
+
+        match ty.info() {
+            IntTypeInfo::Signed(t_min, t_max) => {
+                let (l_min, l_max) = lhs.as_signed();
+
+                let overflow = l_max
+                    .checked_pow(r_max)
+                    .is_none_or(|i| i < t_min || i > t_max)
+                    || l_min
+                        .checked_pow(r_max)
+                        .is_none_or(|i| i < t_min || i > t_max);
+
+                if overflow {
+                    // it will overflow, so idk what to return
+                    return Ok(IInterval::full(ty));
+                }
+
+                Self::strict_pow(lhs, rhs)
+            }
+            IntTypeInfo::Unsigned(t_max) => {
+                let (_, l_max) = lhs.as_unsigned();
+
+                let (pow, pow_overflow) = l_max.overflowing_pow(r_max);
+                if pow_overflow || pow > t_max {
+                    // it's hard to know the true range when overflow happens
+                    return Ok(IInterval::full(ty));
+                }
+
+                Self::strict_pow(lhs, rhs)
+            }
         }
     }
 

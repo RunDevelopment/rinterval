@@ -394,6 +394,23 @@ fn test_wrapping_div() {
 }
 
 #[test]
+fn test_strict_div_euclid() {
+    let op = binary!(Arithmetic::strict_div_euclid);
+    test_binary_all!(op, |lhs, rhs| lhs.checked_div_euclid(rhs));
+    op.snapshot();
+}
+#[test]
+fn test_wrapping_div_euclid() {
+    let op = binary!(Arithmetic::wrapping_div_euclid);
+    test_binary_all!(op, |lhs, rhs| if rhs == 0 {
+        None
+    } else {
+        Some(lhs.wrapping_div_euclid(rhs))
+    });
+    op.snapshot();
+}
+
+#[test]
 fn test_div_ceil() {
     let op = binary!(Arithmetic::div_ceil).only_unsigned();
     test_binary_unsigned!(op, |lhs, rhs| if rhs == 0 {
@@ -401,13 +418,6 @@ fn test_div_ceil() {
     } else {
         Some(lhs.div_ceil(rhs))
     });
-    op.snapshot();
-}
-
-#[test]
-fn test_midpoint() {
-    let op = binary!(Arithmetic::midpoint);
-    test_binary_all!(op, |lhs, rhs| Some(lhs.midpoint(rhs)));
     op.snapshot();
 }
 
@@ -426,6 +436,63 @@ fn test_wrapping_rem() {
         Some(lhs.wrapping_rem(rhs))
     });
     op.snapshot();
+}
+
+#[test]
+fn test_strict_rem_euclid() {
+    let op = binary!(Arithmetic::strict_rem_euclid);
+    test_binary_all!(op, |lhs, rhs| lhs.checked_rem_euclid(rhs));
+    op.snapshot();
+}
+#[test]
+fn test_wrapping_rem_euclid() {
+    let op = binary!(Arithmetic::wrapping_rem_euclid);
+    test_binary_all!(op, |lhs, rhs| if rhs == 0 {
+        None
+    } else {
+        Some(lhs.wrapping_rem_euclid(rhs))
+    });
+    op.snapshot();
+}
+
+#[test]
+fn test_midpoint() {
+    let op = binary!(Arithmetic::midpoint);
+    test_binary_all!(op, |lhs, rhs| Some(lhs.midpoint(rhs)));
+    op.snapshot();
+}
+
+#[test]
+fn test_isqrt() {
+    let op = unary!(Arithmetic::isqrt);
+    #[allow(clippy::absurd_extreme_comparisons, unused_comparisons)]
+    {
+        test_unary_all!(op, |x| if x < 0 { None } else { Some(x.isqrt()) });
+    }
+    op.snapshot();
+}
+
+#[test]
+fn test_saturating_pow() {
+    let op = binary!(Arithmetic::saturating_pow);
+    test_binary_all!(
+        op,
+        |lhs, rhs| Some(lhs.saturating_pow(rhs)),
+        rhs = VALUES_U32
+    );
+    op.snapshot_rhs_u32();
+}
+#[test]
+fn test_strict_pow() {
+    let op = binary!(Arithmetic::strict_pow);
+    test_binary_all!(op, |lhs, rhs| lhs.checked_pow(rhs), rhs = VALUES_U32);
+    op.snapshot_rhs_u32();
+}
+#[test]
+fn test_wrapping_pow() {
+    let op = binary!(Arithmetic::wrapping_pow);
+    test_binary_all!(op, |lhs, rhs| Some(lhs.wrapping_pow(rhs)), rhs = VALUES_U32);
+    op.snapshot_rhs_u32();
 }
 
 #[test]
