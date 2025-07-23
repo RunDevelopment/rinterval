@@ -2040,49 +2040,17 @@ impl Arithmetic {
         }
 
         if ty.is_signed() {
-            Ok(split_by_sign_bit(lhs, |min, max| {
-                let bits_interval = IInterval::new_signed(ty, min.cast_signed(), max.cast_signed());
-                let bits = Bits::from_non_empty(&bits_interval);
-
-                let mut zero = bits.zero.cast_signed();
-                let mut one = bits.one.cast_signed();
-
-                zero >>= r_min;
-                one >>= r_min;
-
-                let mut result =
-                    Bits::new(zero.cast_unsigned(), one.cast_unsigned()).to_interval(ty);
-                for _ in r_min..r_max {
-                    if result.min == 0 || result.min == -1 {
-                        break; // no need to shift further, as the result will not change
-                    }
-                    zero >>= 1;
-                    one >>= 1;
-                    result = result.hull(
-                        &Bits::new(zero.cast_unsigned(), one.cast_unsigned()).to_interval(ty),
-                    );
+            Ok(split_by_sign_bit_signed(lhs, |min, max, sign| {
+                if sign == SignBit::NonNeg {
+                    IInterval::new_signed(ty, min >> r_max, max >> r_min)
+                } else {
+                    IInterval::new_signed(ty, min >> r_min, max >> r_max)
                 }
-
-                result
             }))
         } else {
-            let mut bits = Bits::from_non_empty(lhs);
+            let (l_min, l_max) = lhs.as_unsigned();
 
-            bits.zero >>= r_min;
-            bits.one >>= r_min;
-
-            let mut result = bits.to_interval(ty);
-
-            for _ in r_min..r_max {
-                if result.min == 0 {
-                    break; // no need to shift further, as the result will not change
-                }
-                bits.zero >>= 1;
-                bits.one >>= 1;
-                result = result.hull(&bits.to_interval(ty));
-            }
-
-            Ok(result)
+            Ok(IInterval::new_unsigned(ty, l_min >> r_max, l_max >> r_min))
         }
     }
     pub fn wrapping_shr(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
@@ -2107,25 +2075,17 @@ impl Arithmetic {
             r_max %= bit_width;
         }
 
-        let result = if r_min <= r_max {
+        if r_min <= r_max {
             Self::strict_shr(
                 lhs,
                 &IInterval::new_unsigned(IntType::U32, r_min as u128, r_max as u128),
-            )?
+            )
         } else {
-            let left = Self::strict_shr(
+            Self::strict_shr(
                 lhs,
-                &IInterval::new_unsigned(IntType::U32, 0, r_max as u128),
-            )?;
-            let right = Self::strict_shr(
-                lhs,
-                &IInterval::new_unsigned(IntType::U32, r_min as u128, (bit_width - 1) as u128),
-            )?;
-
-            left.hull(&right)
-        };
-
-        Ok(result)
+                &IInterval::new_unsigned(IntType::U32, 0, (bit_width - 1) as u128),
+            )
+        }
     }
     pub fn unbounded_shr(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         if rhs.ty != IntType::U32 {
