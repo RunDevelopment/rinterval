@@ -1876,13 +1876,30 @@ impl Arithmetic {
         let ty = check_same_ty(lhs, rhs)?;
         check_non_empty!(lhs, rhs);
 
-        let l_bits = Bits::from_non_empty(lhs);
-        let r_bits = Bits::from_non_empty(rhs);
+        if ty.is_signed() {
+            Self::not(&Self::and(&Self::not(lhs)?, &Self::not(rhs)?)?)
+        } else {
+            let l_bits = Bits::from_non_empty(lhs);
+            let r_bits = Bits::from_non_empty(rhs);
 
-        let zero = l_bits.zero | r_bits.zero;
-        let one = l_bits.one | r_bits.one;
+            let zero = l_bits.zero | r_bits.zero;
+            let one = l_bits.one | r_bits.one;
 
-        Ok(Bits::new(zero, one).to_interval(ty))
+            let (mut min, mut max) = (zero, one);
+            debug_assert_eq!(
+                IInterval::new_unsigned(ty, min, max),
+                Bits::new(zero, one).to_interval(ty)
+            );
+
+            // This narrows the range using:
+            //   max(a,b) <= a|b <= a + b
+            let (l_min, l_max) = lhs.as_unsigned();
+            let (r_min, r_max) = rhs.as_unsigned();
+            max = max.min(l_max.saturating_add(r_max));
+            min = min.max(l_min).max(r_min);
+
+            Ok(IInterval::new_unsigned(ty, min, max))
+        }
     }
     /// Bitwise XOR.
     pub fn xor(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
