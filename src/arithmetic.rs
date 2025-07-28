@@ -189,6 +189,13 @@ impl Arithmetic {
             Self::wrapping_shr(value, shift)
         }
     }
+    pub fn next_power_of_two(&self, value: &IInterval) -> ArithResult {
+        if self.checked {
+            Self::strict_next_power_of_two(value)
+        } else {
+            Self::wrapping_next_power_of_two(value)
+        }
+    }
 
     /// Addition which saturates on overflow.
     pub fn saturating_add(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
@@ -1346,6 +1353,142 @@ impl Arithmetic {
         }
     }
 
+    /// Log2, which panics for values <= 0.
+    pub fn ilog(x: &IInterval, base: &IInterval) -> ArithResult {
+        let ty = check_same_ty(x, base)?;
+
+        if x.is_empty() || base.is_empty() {
+            return Ok(IInterval::empty(IntType::U32));
+        }
+
+        let (min, max) = match ty.info() {
+            IntTypeInfo::Signed(_, _) => {
+                let (mut x_min, x_max) = x.as_signed();
+                let (mut base_min, base_max) = base.as_signed();
+
+                if x_max <= 0 {
+                    return Ok(IInterval::empty(IntType::U32));
+                }
+                if x_min <= 0 {
+                    x_min = 1; // ignore non-positive values
+                }
+
+                if base_max < 2 {
+                    return Ok(IInterval::empty(IntType::U32));
+                }
+                if base_min < 2 {
+                    base_min = 2;
+                }
+
+                (x_min.ilog(base_max), x_max.ilog(base_min))
+            }
+            IntTypeInfo::Unsigned(_) => {
+                let (mut x_min, x_max) = x.as_unsigned();
+                let (mut base_min, base_max) = base.as_unsigned();
+
+                if x_max == 0 {
+                    return Ok(IInterval::empty(IntType::U32));
+                }
+                if x_min == 0 {
+                    x_min = 1; // ignore non-positive values
+                }
+
+                if base_max < 2 {
+                    return Ok(IInterval::empty(IntType::U32));
+                }
+                if base_min < 2 {
+                    base_min = 2;
+                }
+
+                (x_min.ilog(base_max), x_max.ilog(base_min))
+            }
+        };
+
+        Ok(IInterval::new_unsigned(
+            IntType::U32,
+            min as u128,
+            max as u128,
+        ))
+    }
+    /// Log2, which panics for values <= 0.
+    pub fn ilog2(x: &IInterval) -> ArithResult {
+        if x.is_empty() {
+            return Ok(IInterval::empty(IntType::U32));
+        }
+
+        let ty = x.ty;
+
+        let (min, max) = match ty.info() {
+            IntTypeInfo::Signed(_, _) => {
+                let (mut x_min, x_max) = x.as_signed();
+                if x_max <= 0 {
+                    return Ok(IInterval::empty(IntType::U32));
+                }
+                if x_min <= 0 {
+                    x_min = 1; // ignore non-positive values
+                }
+
+                (x_min.ilog2(), x_max.ilog2())
+            }
+            IntTypeInfo::Unsigned(_) => {
+                let (mut x_min, x_max) = x.as_unsigned();
+                if x_max == 0 {
+                    return Ok(IInterval::empty(IntType::U32));
+                }
+                if x_min == 0 {
+                    x_min = 1; // ignore non-positive values
+                }
+
+                (x_min.ilog2(), x_max.ilog2())
+            }
+        };
+
+        Ok(IInterval::new_unsigned(
+            IntType::U32,
+            min as u128,
+            max as u128,
+        ))
+    }
+    /// Log10, which panics for values <= 0.
+    pub fn ilog10(x: &IInterval) -> ArithResult {
+        if x.is_empty() {
+            return Ok(IInterval::empty(IntType::U32));
+        }
+
+        let ty = x.ty;
+
+        let (min, max) = match ty.info() {
+            IntTypeInfo::Signed(_, _) => {
+                let (mut x_min, x_max) = x.as_signed();
+                if x_max <= 0 {
+                    return Ok(IInterval::empty(IntType::U32));
+                }
+                if x_min <= 0 {
+                    x_min = 1; // ignore non-positive values
+                }
+
+                (x_min.ilog10(), x_max.ilog10())
+            }
+            IntTypeInfo::Unsigned(_) => {
+                let (mut x_min, x_max) = x.as_unsigned();
+                if x_max == 0 {
+                    return Ok(IInterval::empty(IntType::U32));
+                }
+                if x_min == 0 {
+                    x_min = 1; // ignore non-positive values
+                }
+
+                (x_min.ilog10(), x_max.ilog10())
+            }
+        };
+
+        Ok(IInterval::new_unsigned(
+            IntType::U32,
+            min as u128,
+            max as u128,
+        ))
+    }
+
     /// Power which saturates on overflow.
     pub fn saturating_pow(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         if rhs.ty != IntType::U32 {
@@ -1757,6 +1900,47 @@ impl Arithmetic {
                 }
             }
             IntTypeInfo::Unsigned(_) => Err(ArithError::Unsupported),
+        }
+    }
+
+    /// Absolute difference.
+    pub fn abs_diff(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
+        let ty = check_same_ty(lhs, rhs)?;
+        let ret_ty = ty.to_unsigned();
+
+        if lhs.is_empty() || rhs.is_empty() {
+            return Ok(IInterval::empty(ret_ty));
+        }
+
+        match ty.info() {
+            IntTypeInfo::Signed(_, _) => {
+                let (l_min, l_max) = lhs.as_signed();
+                let (r_min, r_max) = rhs.as_signed();
+
+                let (min, max) = if l_max < r_min {
+                    (r_min.abs_diff(l_max), r_max.abs_diff(l_min))
+                } else if r_max < l_min {
+                    (l_min.abs_diff(r_max), l_max.abs_diff(r_min))
+                } else {
+                    (0, u128::max(r_min.abs_diff(l_max), l_min.abs_diff(r_max)))
+                };
+
+                Ok(IInterval::new_unsigned(ret_ty, min, max))
+            }
+            IntTypeInfo::Unsigned(_) => {
+                let (l_min, l_max) = lhs.as_unsigned();
+                let (r_min, r_max) = rhs.as_unsigned();
+
+                let (min, max) = if l_max < r_min {
+                    (r_min - l_max, r_max - l_min)
+                } else if r_max < l_min {
+                    (l_min - r_max, l_max - r_min)
+                } else {
+                    (0, u128::max(r_min.abs_diff(l_max), l_min.abs_diff(r_max)))
+                };
+
+                Ok(IInterval::new_unsigned(ret_ty, min, max))
+            }
         }
     }
 
@@ -2226,6 +2410,121 @@ impl Arithmetic {
     }
     pub fn count_zeros(x: &IInterval) -> ArithResult {
         Self::count_ones(&Self::not(x)?)
+    }
+
+    pub fn signum(x: &IInterval) -> ArithResult {
+        check_non_empty!(x);
+
+        let ty = x.ty;
+
+        match ty.info() {
+            IntTypeInfo::Signed(_, _) => {
+                let (min, max) = x.as_signed();
+
+                if min > 0 {
+                    Ok(IInterval::single_signed(ty, 1))
+                } else if max < 0 {
+                    Ok(IInterval::single_signed(ty, -1))
+                } else {
+                    let min = if min < 0 { -1 } else { 0 };
+                    let max = if max > 0 { 1 } else { 0 };
+                    Ok(IInterval::new_signed(ty, min, max))
+                }
+            }
+            IntTypeInfo::Unsigned(_) => Err(ArithError::Unsupported),
+        }
+    }
+
+    /// Next power of two which panics on overflow.
+    pub fn strict_next_power_of_two(x: &IInterval) -> ArithResult {
+        check_non_empty!(x);
+
+        let ty = x.ty;
+
+        match ty.info() {
+            IntTypeInfo::Signed(_, _) => Err(ArithError::Unsupported),
+            IntTypeInfo::Unsigned(t_max) => {
+                let (x_min, x_max) = x.as_unsigned();
+
+                let min = x_min.checked_next_power_of_two().filter(|i| i <= &t_max);
+                let max = x_max.checked_next_power_of_two().filter(|i| i <= &t_max);
+
+                let result = match (min, max) {
+                    (Some(min), Some(max)) => IInterval::new_unsigned(ty, min, max),
+                    (Some(min), None) => IInterval::new_unsigned(ty, min, t_max ^ (t_max >> 1)),
+                    (None, _) => IInterval::empty(ty),
+                };
+
+                Ok(result)
+            }
+        }
+    }
+    /// Next power of two which wraps on overflow.
+    pub fn wrapping_next_power_of_two(x: &IInterval) -> ArithResult {
+        check_non_empty!(x);
+
+        let ty = x.ty;
+
+        match ty.info() {
+            IntTypeInfo::Signed(_, _) => Err(ArithError::Unsupported),
+            IntTypeInfo::Unsigned(t_max) => {
+                let (x_min, x_max) = x.as_unsigned();
+
+                let min = x_min.checked_next_power_of_two().filter(|i| i <= &t_max);
+                let max = x_max.checked_next_power_of_two().filter(|i| i <= &t_max);
+
+                let result = match (min, max) {
+                    (Some(min), Some(max)) => IInterval::new_unsigned(ty, min, max),
+                    (Some(_), None) => IInterval::new_unsigned(ty, 0, t_max ^ (t_max >> 1)),
+                    (None, _) => IInterval::single_unsigned(ty, 0),
+                };
+
+                Ok(result)
+            }
+        }
+    }
+
+    /// Next multiple of which panics on overflow.
+    pub fn strict_next_multiple_of(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
+        let ty = check_same_ty(lhs, rhs)?;
+        check_non_empty!(lhs, rhs);
+
+        match ty.info() {
+            IntTypeInfo::Signed(_, _) => Err(ArithError::Unsupported),
+            IntTypeInfo::Unsigned(t_max) => {
+                let (l_min, l_max) = lhs.as_unsigned();
+                let (mut r_min, r_max) = rhs.as_unsigned();
+
+                if r_max == 0 {
+                    // x % 0 panics
+                    return Ok(IInterval::empty(ty));
+                }
+                if r_min == 0 {
+                    r_min = 1;
+                }
+
+                if r_min == r_max {
+                    let r = r_min;
+
+                    // This is a lot easier if rhs is a constant.
+                    let Some(min) = l_min.checked_next_multiple_of(r).filter(|i| i <= &t_max)
+                    else {
+                        return Ok(IInterval::empty(ty));
+                    };
+                    let max = l_max
+                        .checked_next_multiple_of(r)
+                        .map(|i| if i > t_max { i - r } else { i })
+                        .unwrap_or(t_max);
+
+                    return Ok(IInterval::new_unsigned(ty, min, max));
+                }
+
+                let min = l_min;
+                let max = l_max.saturating_add(r_max - 1).min(t_max);
+
+                Ok(IInterval::new_unsigned(ty, min, max))
+            }
+        }
     }
 
     /// Casts unsigned to signed.

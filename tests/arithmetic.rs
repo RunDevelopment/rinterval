@@ -473,6 +473,25 @@ fn test_isqrt() {
 }
 
 #[test]
+fn test_ilog() {
+    let op = binary!(Arithmetic::ilog);
+    test_binary_all!(op, |lhs, rhs| lhs.checked_ilog(rhs));
+    op.snapshot();
+}
+#[test]
+fn test_ilog2() {
+    let op = unary!(Arithmetic::ilog2);
+    test_unary_all!(op, |x| x.checked_ilog2());
+    op.snapshot();
+}
+#[test]
+fn test_ilog10() {
+    let op = unary!(Arithmetic::ilog10);
+    test_unary_all!(op, |x| x.checked_ilog10());
+    op.snapshot();
+}
+
+#[test]
 fn test_saturating_pow() {
     let op = binary!(Arithmetic::saturating_pow);
     test_binary_all!(
@@ -517,6 +536,13 @@ fn test_wrapping_abs() {
 fn test_unsigned_abs() {
     let op = unary!(Arithmetic::unsigned_abs).only_signed();
     test_unary_signed!(op, |x| Some(x.unsigned_abs()));
+    op.snapshot();
+}
+
+#[test]
+fn test_abs_diff() {
+    let op = binary!(Arithmetic::abs_diff).commutative();
+    test_binary_all!(op, |lhs, rhs| Some(lhs.abs_diff(rhs)));
     op.snapshot();
 }
 
@@ -638,6 +664,33 @@ fn test_count_ones() {
 fn test_count_zeros() {
     let op = unary!(Arithmetic::count_zeros);
     test_unary_all!(op, |x| Some(x.count_zeros()));
+    op.snapshot();
+}
+
+#[test]
+fn test_strict_next_power_of_two() {
+    let op = unary!(Arithmetic::strict_next_power_of_two).only_unsigned();
+    test_unary_unsigned!(op, |x| x.checked_next_power_of_two());
+    op.snapshot();
+}
+#[test]
+fn test_wrapping_next_power_of_two() {
+    let op = unary!(Arithmetic::wrapping_next_power_of_two).only_unsigned();
+    test_unary_unsigned!(op, |x| Some(x.checked_next_power_of_two().unwrap_or(0)));
+    op.snapshot();
+}
+
+#[test]
+fn test_strict_next_multiple_of() {
+    let op = binary!(Arithmetic::strict_next_multiple_of).only_unsigned();
+    test_binary_unsigned!(op, |lhs, rhs| lhs.checked_next_multiple_of(rhs));
+    op.snapshot();
+}
+
+#[test]
+fn test_signum() {
+    let op = unary!(Arithmetic::signum).only_signed();
+    test_unary_signed!(op, |x| Some(x.signum()));
     op.snapshot();
 }
 
