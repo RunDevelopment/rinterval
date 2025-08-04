@@ -77,18 +77,22 @@ impl IntType {
             IntType::I128 => IntType::U128,
         }
     }
+    pub const fn to_signed(self) -> IntType {
+        match self {
+            IntType::U8 | IntType::I8 => IntType::I8,
+            IntType::U16 | IntType::I16 => IntType::I16,
+            IntType::U32 | IntType::I32 => IntType::I32,
+            IntType::U64 | IntType::I64 => IntType::I64,
+            IntType::U128 | IntType::I128 => IntType::I128,
+        }
+    }
     pub const fn to_unsigned(self) -> IntType {
         match self {
-            IntType::U8 => IntType::U8,
-            IntType::U16 => IntType::U16,
-            IntType::U32 => IntType::U32,
-            IntType::U64 => IntType::U64,
-            IntType::U128 => IntType::U128,
-            IntType::I8 => IntType::U8,
-            IntType::I16 => IntType::U16,
-            IntType::I32 => IntType::U32,
-            IntType::I64 => IntType::U64,
-            IntType::I128 => IntType::U128,
+            IntType::U8 | IntType::I8 => IntType::U8,
+            IntType::U16 | IntType::I16 => IntType::U16,
+            IntType::U32 | IntType::I32 => IntType::U32,
+            IntType::U64 | IntType::I64 => IntType::U64,
+            IntType::U128 | IntType::I128 => IntType::U128,
         }
     }
 }
@@ -106,7 +110,7 @@ pub(crate) enum IntTypeInfo {
 /// possible to accurately represent the set of all possible values of an
 /// integer expression using only its minimum and maximum values.
 ///
-/// As such, this type represents a **subset** of the actual set of values of
+/// As such, this type represents a **superset** of the actual set of values of
 /// an expression.
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -179,6 +183,47 @@ impl IInterval {
             min > max
         }
     }
+    pub fn is_full(&self) -> bool {
+        self == &Self::full(self.ty)
+    }
+
+    /// Returns whether the interval contains at least one negative value.
+    pub fn contains_negative(&self) -> bool {
+        if self.is_empty() || !self.ty.is_signed() {
+            false
+        } else {
+            let (min, _) = self.as_signed();
+            min < 0
+        }
+    }
+    /// Returns whether all values in the interval can be represented by the
+    /// given target type.
+    pub fn fits_into(&self, target: IntType) -> bool {
+        if self.is_empty() || self.ty == target {
+            return true; // empty set fits into any type, and same type always fits
+        }
+
+        match target.info() {
+            IntTypeInfo::Signed(t_min, t_max) => {
+                if self.ty.is_signed() {
+                    let (min, max) = self.as_signed();
+                    t_min <= min && max <= t_max
+                } else {
+                    let (_, max) = self.as_unsigned();
+                    max <= t_max.cast_unsigned()
+                }
+            }
+            IntTypeInfo::Unsigned(t_max) => {
+                if self.ty.is_signed() {
+                    let (min, max) = self.as_signed();
+                    min >= 0 && max.cast_unsigned() <= t_max
+                } else {
+                    let (_, max) = self.as_unsigned();
+                    max <= t_max
+                }
+            }
+        }
+    }
 
     /// Returns the minimum and maximum values for intervals of signed types.
     ///
@@ -201,7 +246,7 @@ impl IInterval {
     /// Returns the smallest interval that contains both `self` and `other`.
     ///
     /// The result is unspecified if the two intervals have different types.
-    pub fn hull(&self, other: &Self) -> Self {
+    pub fn hull_unwrap(&self, other: &Self) -> Self {
         debug_assert!(self.ty == other.ty);
 
         if self.is_empty() {
@@ -224,17 +269,14 @@ impl IInterval {
             Self::new_unsigned(self.ty, min, max)
         }
     }
-    /// Returns the largest interval that is contained in both `self` and `other`.
+    /// Returns the smallest interval that contains both `self` and `other`.
     ///
-    /// The result is unspecified if the two intervals have different types.
-    pub fn intersection(&self, other: &Self) -> Self {
-        debug_assert!(self.ty == other.ty);
-
-        if self.is_empty() || other.is_empty() {
-            return Self::empty(self.ty);
+    /// Returns `None` if the two intervals have different types.
+    pub fn hull(&self, other: &Self) -> Option<Self> {
+        if self.ty != other.ty {
+            return None;
         }
-
-        todo!()
+        Some(self.hull_unwrap(other))
     }
 
     /// Returns whether all values in `self` are also contained in `other`.

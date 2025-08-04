@@ -66,7 +66,7 @@ fn split_by_sign_bit(i: &IInterval, mut f: impl FnMut(u128, u128) -> IInterval) 
         if min < 0 {
             if max >= 0 {
                 f(min.cast_unsigned(), u128::MAX)
-                    .hull(&f(min.max(0).cast_unsigned(), max.cast_unsigned()))
+                    .hull_unwrap(&f(min.max(0).cast_unsigned(), max.cast_unsigned()))
             } else {
                 f(min.cast_unsigned(), max.cast_unsigned())
             }
@@ -90,7 +90,7 @@ fn split_by_sign_bit_signed(
 
     if min < 0 {
         if max >= 0 {
-            f(min, -1, SignBit::Neg).hull(&f(min.max(0), max, SignBit::NonNeg))
+            f(min, -1, SignBit::Neg).hull_unwrap(&f(min.max(0), max, SignBit::NonNeg))
         } else {
             f(min, max, SignBit::Neg)
         }
@@ -530,7 +530,7 @@ impl Arithmetic {
                 // we can now safely negate rhs
                 let rhs_neg = IInterval::new_signed(ty, -r_max, -r_min);
                 let sum = Self::strict_add(lhs, &rhs_neg)?;
-                Ok(sum.hull(&min_range))
+                Ok(sum.hull_unwrap(&min_range))
             }
             IntTypeInfo::Unsigned(_) => {
                 let (l_min, l_max) = lhs.as_unsigned();
@@ -653,7 +653,7 @@ impl Arithmetic {
                     let mut result = IInterval::empty(ty);
 
                     if l_min < 0 {
-                        result = result.hull(&quadrant(
+                        result = result.hull_unwrap(&quadrant(
                             l_min,
                             l_max.min(-1),
                             SignBit::Neg,
@@ -663,10 +663,10 @@ impl Arithmetic {
                         ));
                     }
                     if l_min <= 0 && 0 <= l_max {
-                        result = result.hull(&IInterval::single_signed(ty, 0));
+                        result = result.hull_unwrap(&IInterval::single_signed(ty, 0));
                     }
                     if l_max > 0 {
-                        result = result.hull(&quadrant(
+                        result = result.hull_unwrap(&quadrant(
                             l_min.max(1),
                             l_max,
                             SignBit::NonNeg,
@@ -682,13 +682,13 @@ impl Arithmetic {
                 let mut result = IInterval::empty(ty);
 
                 if r_min < 0 {
-                    result = result.hull(&split_l(r_min, r_max.min(-1), SignBit::Neg));
+                    result = result.hull_unwrap(&split_l(r_min, r_max.min(-1), SignBit::Neg));
                 }
                 if r_min <= 0 && 0 <= r_max {
-                    result = result.hull(&IInterval::single_signed(ty, 0));
+                    result = result.hull_unwrap(&IInterval::single_signed(ty, 0));
                 }
                 if r_max > 0 {
-                    result = result.hull(&split_l(r_min.max(1), r_max, SignBit::NonNeg));
+                    result = result.hull_unwrap(&split_l(r_min.max(1), r_max, SignBit::NonNeg));
                 }
 
                 Ok(result)
@@ -785,7 +785,7 @@ impl Arithmetic {
 
                 if l_min == t_min && r_min <= -1 && -1 <= r_max {
                     // t_min / -1 will overflow, so we have to add t_min to the result
-                    Ok(IInterval::single_signed(ty, t_max).hull(&strict))
+                    Ok(IInterval::single_signed(ty, t_max).hull_unwrap(&strict))
                 } else {
                     Ok(strict)
                 }
@@ -820,13 +820,13 @@ impl Arithmetic {
                     let r_max = r_max.min(-2);
 
                     let points = [l_min / r_min, l_min / r_max, l_max / r_min, l_max / r_max];
-                    result = result.hull(&range_4(ty, points));
+                    result = result.hull_unwrap(&range_4(ty, points));
                 }
 
                 // case 2: -1
                 if r_min <= -1 && -1 <= r_max {
                     // same as strict_neg
-                    result = result.hull(&Self::strict_neg(lhs)?);
+                    result = result.hull_unwrap(&Self::strict_neg(lhs)?);
                 }
 
                 // case 3: 0
@@ -837,7 +837,7 @@ impl Arithmetic {
                     let r_min = r_min.max(1);
 
                     let points = [l_min / r_min, l_min / r_max, l_max / r_min, l_max / r_max];
-                    result = result.hull(&range_4(ty, points));
+                    result = result.hull_unwrap(&range_4(ty, points));
                 }
 
                 Ok(result)
@@ -878,7 +878,7 @@ impl Arithmetic {
 
                 if l_min == t_min && r_min <= -1 && -1 <= r_max {
                     // t_min / -1 will overflow, so we have to add t_min to the result
-                    Ok(IInterval::single_signed(ty, t_min).hull(&strict))
+                    Ok(IInterval::single_signed(ty, t_min).hull_unwrap(&strict))
                 } else {
                     Ok(strict)
                 }
@@ -929,7 +929,7 @@ impl Arithmetic {
 
                 if l_min == t_min && r_min <= -1 && -1 <= r_max {
                     // t_min / -1 will overflow, so we have to add t_min to the result
-                    Ok(IInterval::single_signed(ty, t_min).hull(&strict))
+                    Ok(IInterval::single_signed(ty, t_min).hull_unwrap(&strict))
                 } else {
                     Ok(strict)
                 }
@@ -997,7 +997,7 @@ impl Arithmetic {
                         if l_max == t_min {
                             zero
                         } else {
-                            zero.hull(&IInterval::new_signed(ty, l_min + 1, l_max))
+                            zero.hull_unwrap(&IInterval::new_signed(ty, l_min + 1, l_max))
                         }
                     } else {
                         lhs.clone()
@@ -1075,19 +1075,19 @@ impl Arithmetic {
                         IInterval::empty(ty)
                     };
 
-                    negative.hull(&positive).hull(&min_range)
+                    negative.hull_unwrap(&positive).hull_unwrap(&min_range)
                 };
 
                 // case 1: -inf..=-2
                 if r_min <= -2 {
-                    result = result.hull(&positive_rhs(-r_max.min(-2), -r_min));
+                    result = result.hull_unwrap(&positive_rhs(-r_max.min(-2), -r_min));
                 }
 
                 // case 2: -1
                 if r_min <= -1 && -1 <= r_max {
                     // t_min % -1 panics, while everything else goes to 0
                     if l_max != t_min {
-                        result = result.hull(&IInterval::single_signed(ty, 0));
+                        result = result.hull_unwrap(&IInterval::single_signed(ty, 0));
                     }
                 }
 
@@ -1096,7 +1096,7 @@ impl Arithmetic {
 
                 // case 4: 1..=inf
                 if r_max >= 1 {
-                    result = result.hull(&positive_rhs(r_min.max(1), r_max));
+                    result = result.hull_unwrap(&positive_rhs(r_min.max(1), r_max));
                 }
 
                 Ok(result)
@@ -1153,7 +1153,7 @@ impl Arithmetic {
 
                 if l_min == t_min && r_min <= -1 && -1 <= r_max {
                     // t_min % -1 == 0 when wrapping
-                    Ok(IInterval::single_signed(ty, 0).hull(&strict))
+                    Ok(IInterval::single_signed(ty, 0).hull_unwrap(&strict))
                 } else {
                     Ok(strict)
                 }
@@ -1261,7 +1261,7 @@ impl Arithmetic {
                     IInterval::new_signed(ty, 0, r_max - 1)
                 });
 
-                Ok(result.hull(&general))
+                Ok(result.hull_unwrap(&general))
             }
             // same as strict_rem for unsigned types
             IntTypeInfo::Unsigned(_) => Self::strict_rem(lhs, rhs),
@@ -1284,7 +1284,7 @@ impl Arithmetic {
 
                 if l_min == t_min && r_min <= -1 && -1 <= r_max {
                     // t_min % -1 == 0 when wrapping
-                    Ok(IInterval::single_signed(ty, 0).hull(&strict))
+                    Ok(IInterval::single_signed(ty, 0).hull_unwrap(&strict))
                 } else {
                     Ok(strict)
                 }
@@ -1534,11 +1534,11 @@ impl Arithmetic {
                     return Ok(single_r(r_min));
                 }
 
-                let mut result = single_r(r_min).hull(&single_r(r_max));
+                let mut result = single_r(r_min).hull_unwrap(&single_r(r_max));
 
                 if r_min + 1 < r_max && l_min < 0 {
-                    result = result.hull(&single_r(r_min + 1));
-                    result = result.hull(&single_r(r_max - 1));
+                    result = result.hull_unwrap(&single_r(r_min + 1));
+                    result = result.hull_unwrap(&single_r(r_max - 1));
                 }
 
                 Ok(result)
@@ -1669,7 +1669,7 @@ impl Arithmetic {
                     return Ok(min_range);
                 }
 
-                let mut result = min_range.hull(&single_r(r_min + 1));
+                let mut result = min_range.hull_unwrap(&single_r(r_min + 1));
                 drop(min_range);
 
                 if result.max == t_max && (result.min == t_min || l_min >= 0) {
@@ -1735,7 +1735,7 @@ impl Arithmetic {
                 }
                 let max = l_max.saturating_pow(r_max).min(t_max);
 
-                Ok(IInterval::new_unsigned(ty, min, max).hull(&r_zero))
+                Ok(IInterval::new_unsigned(ty, min, max).hull_unwrap(&r_zero))
             }
         }
     }
@@ -1865,7 +1865,7 @@ impl Arithmetic {
                 if x_min == t_min {
                     let min_range = IInterval::single_signed(x.ty, t_min);
 
-                    Ok(strict.hull(&min_range))
+                    Ok(strict.hull_unwrap(&min_range))
                 } else {
                     Ok(strict)
                 }
@@ -1894,7 +1894,7 @@ impl Arithmetic {
                     let would_overflow =
                         IInterval::single_unsigned(x.ty.swap_signedness(), t_max as u128 + 1);
 
-                    Ok(strict.hull(&would_overflow))
+                    Ok(strict.hull_unwrap(&would_overflow))
                 } else {
                     Ok(strict)
                 }
@@ -2031,14 +2031,14 @@ impl Arithmetic {
                     let l_p = IInterval::new_signed(ty, 0, l_max);
 
                     let result = if r_neg {
-                        and(&l_n, rhs).hull(&and(&l_p, rhs))
+                        and(&l_n, rhs).hull_unwrap(&and(&l_p, rhs))
                     } else {
                         let r_n = IInterval::new_signed(ty, r_min, -1);
                         let r_p = IInterval::new_signed(ty, 0, r_max);
                         and(&l_n, &r_n)
-                            .hull(&and(&l_n, &r_p))
-                            .hull(&and(&l_p, &r_n))
-                            .hull(&and(&l_p, &r_p))
+                            .hull_unwrap(&and(&l_n, &r_p))
+                            .hull_unwrap(&and(&l_p, &r_n))
+                            .hull_unwrap(&and(&l_p, &r_p))
                     };
                     return Ok(result);
                 }
@@ -2047,7 +2047,7 @@ impl Arithmetic {
                     let r_n = IInterval::new_signed(ty, r_min, -1);
                     let r_p = IInterval::new_signed(ty, 0, r_max);
 
-                    return Ok(and(lhs, &r_n).hull(&and(lhs, &r_p)));
+                    return Ok(and(lhs, &r_n).hull_unwrap(&and(lhs, &r_p)));
                 }
             }
             Ok(and(lhs, rhs))
@@ -2152,7 +2152,7 @@ impl Arithmetic {
         for _ in r_min..r_max {
             bits.zero = (bits.zero << 1) & mask;
             bits.one = (bits.one << 1) & mask;
-            result = result.hull(&bits.to_interval(ty));
+            result = result.hull_unwrap(&bits.to_interval(ty));
         }
 
         Ok(result)
@@ -2194,7 +2194,7 @@ impl Arithmetic {
                 &IInterval::new_unsigned(IntType::U32, r_min as u128, (bit_width - 1) as u128),
             )?;
 
-            left.hull(&right)
+            left.hull_unwrap(&right)
         };
 
         Ok(result)
@@ -2217,7 +2217,7 @@ impl Arithmetic {
             } else {
                 IInterval::single_unsigned(ty, 0)
             };
-            result = result.hull(&zero);
+            result = result.hull_unwrap(&zero);
         }
 
         Ok(result)
@@ -2316,7 +2316,7 @@ impl Arithmetic {
             } else {
                 IInterval::single_unsigned(ty, 0)
             };
-            result = result.hull(&zero);
+            result = result.hull_unwrap(&zero);
         }
 
         Ok(result)
