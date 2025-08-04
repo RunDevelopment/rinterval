@@ -587,13 +587,31 @@ fn test_not() {
 #[test]
 fn test_strict_shl() {
     let op = binary!(Arithmetic::strict_shl);
-    test_binary_all!(op, |lhs, rhs| lhs.checked_shl(rhs), rhs = VALUES_U32);
+    test_binary_all!(op, |l, r| l.checked_shl(r), rhs = VALUES_U32);
+    test_binary_all!(
+        op,
+        |l, r| l.checked_shl(u32::try_from(r).ok()?),
+        rhs = VALUES_I32
+    );
+    test_binary_all!(
+        op,
+        |l, r| l.checked_shl(u32::try_from(r).ok()?),
+        rhs = VALUES_U128
+    );
+    test_binary_all!(
+        op,
+        |l, r| l.checked_shl(u32::try_from(r).ok()?),
+        rhs = VALUES_I128
+    );
     op.snapshot_rhs_u32();
 }
 #[test]
 fn test_wrapping_shl() {
     let op = binary!(Arithmetic::wrapping_shl);
-    test_binary_all!(op, |lhs, rhs| Some(lhs.wrapping_shl(rhs)), rhs = VALUES_U32);
+    test_binary_all!(op, |l, r| Some(l.wrapping_shl(r)), rhs = VALUES_U32);
+    test_binary_all!(op, |l, r| Some(l.wrapping_shl(r as u32)), rhs = VALUES_I32);
+    test_binary_all!(op, |l, r| Some(l.wrapping_shl(r as u32)), rhs = VALUES_U128);
+    test_binary_all!(op, |l, r| Some(l.wrapping_shl(r as u32)), rhs = VALUES_I128);
     op.snapshot_rhs_u32();
 }
 #[test]
@@ -610,13 +628,31 @@ fn test_unbounded_shl() {
 #[test]
 fn test_strict_shr() {
     let op = binary!(Arithmetic::strict_shr);
-    test_binary_all!(op, |lhs, rhs| lhs.checked_shr(rhs), rhs = VALUES_U32);
+    test_binary_all!(op, |l, r| l.checked_shr(r), rhs = VALUES_U32);
+    test_binary_all!(
+        op,
+        |l, r| l.checked_shr(u32::try_from(r).ok()?),
+        rhs = VALUES_I32
+    );
+    test_binary_all!(
+        op,
+        |l, r| l.checked_shr(u32::try_from(r).ok()?),
+        rhs = VALUES_U128
+    );
+    test_binary_all!(
+        op,
+        |l, r| l.checked_shr(u32::try_from(r).ok()?),
+        rhs = VALUES_I128
+    );
     op.snapshot_rhs_u32();
 }
 #[test]
 fn test_wrapping_shr() {
     let op = binary!(Arithmetic::wrapping_shr);
-    test_binary_all!(op, |lhs, rhs| Some(lhs.wrapping_shr(rhs)), rhs = VALUES_U32);
+    test_binary_all!(op, |l, r| Some(l.wrapping_shr(r)), rhs = VALUES_U32);
+    test_binary_all!(op, |l, r| Some(l.wrapping_shr(r as u32)), rhs = VALUES_I32);
+    test_binary_all!(op, |l, r| Some(l.wrapping_shr(r as u32)), rhs = VALUES_U128);
+    test_binary_all!(op, |l, r| Some(l.wrapping_shr(r as u32)), rhs = VALUES_I128);
     op.snapshot_rhs_u32();
 }
 #[test]
@@ -718,7 +754,6 @@ macro_rules! test_case_as {
         }
     };
 }
-
 test_case_as!(test_cast_as_i8, i8);
 test_case_as!(test_cast_as_i16, i16);
 test_case_as!(test_cast_as_i32, i32);
