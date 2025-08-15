@@ -189,7 +189,7 @@ impl IInterval {
 
     /// Returns whether the interval contains at least one negative value.
     pub fn contains_negative(&self) -> bool {
-        if self.is_empty() || !self.ty.is_signed() {
+        if !self.ty.is_signed() || self.is_empty() {
             false
         } else {
             let (min, _) = self.as_signed();

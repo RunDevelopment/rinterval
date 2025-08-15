@@ -2059,7 +2059,18 @@ impl Arithmetic {
             let zero = l_bits.zero & r_bits.zero;
             let one = l_bits.one & r_bits.one;
 
-            Bits::new(zero, one).to_interval(lhs.ty)
+            let mut r = Bits::new(zero, one).to_interval(lhs.ty);
+
+            if !lhs.contains_negative() && !rhs.contains_negative() {
+                debug_assert!(!r.contains_negative());
+                // If both are positive, we can narrow the result range using:
+                //   a & b <= min(a, b)
+                let l_max = lhs.max as u128;
+                let r_max = rhs.max as u128;
+                r.max = (r.max as u128).min(l_max.min(r_max)) as i128;
+            }
+
+            r
         }
 
         if ty.is_signed() {
@@ -2099,7 +2110,14 @@ impl Arithmetic {
             }
             Ok(and(lhs, rhs))
         } else {
-            Ok(and(lhs, rhs))
+            let mut r = and(lhs, rhs);
+
+            // The result can be narrowed using: a & b <= min(a, b)
+            let (_, l_max) = lhs.as_unsigned();
+            let (_, r_max) = rhs.as_unsigned();
+            r.max = (r.max as u128).min(l_max.min(r_max)) as i128;
+
+            Ok(r)
         }
     }
     /// Bitwise OR.
