@@ -1,8 +1,8 @@
 # Arithmetic::strict_neg
 
 I8 => I8: >
-  <empty>  ->  <empty>
-  -128  ->  <empty>
+  empty  ->  empty
+  -128  ->  empty
   -127  ->  127
   -126  ->  126
   -100  ->  100
@@ -35,8 +35,8 @@ I8 => I8: >
   -128..=126  ->  -126..=127
 
 I32 => I32: >
-  <empty>  ->  <empty>
-  -2147483648  ->  <empty>
+  empty  ->  empty
+  -2147483648  ->  empty
   -2147483647  ->  2147483647
   -2147483646  ->  2147483646
   -100  ->  100
@@ -68,61 +68,61 @@ I32 => I32: >
   -2147483648..=2147483646  ->  -2147483646..=2147483647
 
 U8 => U8: >
-  <empty>  ->  <empty>
+  empty  ->  empty
   0  ->  0
-  1  ->  <empty>
-  2  ->  <empty>
-  3  ->  <empty>
-  4  ->  <empty>
-  10  ->  <empty>
-  99  ->  <empty>
-  100  ->  <empty>
-  101  ->  <empty>
-  127  ->  <empty>
-  128  ->  <empty>
-  253  ->  <empty>
-  254  ->  <empty>
-  255  ->  <empty>
+  1  ->  empty
+  2  ->  empty
+  3  ->  empty
+  4  ->  empty
+  10  ->  empty
+  99  ->  empty
+  100  ->  empty
+  101  ->  empty
+  127  ->  empty
+  128  ->  empty
+  253  ->  empty
+  254  ->  empty
+  255  ->  empty
   0..=255  ->  0
   0..=10  ->  0
-  7..=9  ->  <empty>
-  4..=8  ->  <empty>
+  7..=9  ->  empty
+  4..=8  ->  empty
   0..=3  ->  0
-  3..=4  ->  <empty>
-  1..=100  ->  <empty>
+  3..=4  ->  empty
+  1..=100  ->  empty
   0..=99  ->  0
-  100..=200  ->  <empty>
-  1..=255  ->  <empty>
+  100..=200  ->  empty
+  1..=255  ->  empty
   0..=254  ->  0
-  253..=255  ->  <empty>
+  253..=255  ->  empty
 
 U32 => U32: >
-  <empty>  ->  <empty>
+  empty  ->  empty
   0  ->  0
-  1  ->  <empty>
-  2  ->  <empty>
-  3  ->  <empty>
-  4  ->  <empty>
-  10  ->  <empty>
-  15  ->  <empty>
-  16  ->  <empty>
-  99  ->  <empty>
-  100  ->  <empty>
-  101  ->  <empty>
-  2147483647  ->  <empty>
-  2147483648  ->  <empty>
-  4294967293  ->  <empty>
-  4294967294  ->  <empty>
-  4294967295  ->  <empty>
+  1  ->  empty
+  2  ->  empty
+  3  ->  empty
+  4  ->  empty
+  10  ->  empty
+  15  ->  empty
+  16  ->  empty
+  99  ->  empty
+  100  ->  empty
+  101  ->  empty
+  2147483647  ->  empty
+  2147483648  ->  empty
+  4294967293  ->  empty
+  4294967294  ->  empty
+  4294967295  ->  empty
   0..=4294967295  ->  0
   0..=10  ->  0
-  7..=9  ->  <empty>
-  4..=8  ->  <empty>
+  7..=9  ->  empty
+  4..=8  ->  empty
   0..=3  ->  0
-  3..=4  ->  <empty>
-  1..=100  ->  <empty>
+  3..=4  ->  empty
+  1..=100  ->  empty
   0..=99  ->  0
-  1..=4294967295  ->  <empty>
+  1..=4294967295  ->  empty
   0..=4294967294  ->  0
-  4294967293..=4294967295  ->  <empty>
+  4294967293..=4294967295  ->  empty
 

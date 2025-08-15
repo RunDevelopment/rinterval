@@ -1,7 +1,7 @@
 # Arithmetic::wrapping_next_power_of_two
 
 U8 => U8: >
-  <empty>  ->  <empty>
+  empty  ->  empty
   0  ->  1
   1  ->  1
   2  ->  2
@@ -30,7 +30,7 @@ U8 => U8: >
   253..=255  ->  0
 
 U32 => U32: >
-  <empty>  ->  <empty>
+  empty  ->  empty
   0  ->  1
   1  ->  1
   2  ->  2

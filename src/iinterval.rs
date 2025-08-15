@@ -308,7 +308,7 @@ impl IInterval {
 
     pub fn to_string_untyped(&self) -> String {
         if self.is_empty() {
-            "<empty>".to_string()
+            "empty".to_string()
         } else if self.ty.is_signed() {
             let (min, max) = self.as_signed();
             if min == max {
@@ -395,21 +395,29 @@ impl IInterval {
 impl std::fmt::Display for IInterval {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.is_empty() {
-            write!(f, "<empty>[{:?}]", self.ty)
+            write!(f, "empty")?;
         } else if self.ty.is_signed() {
             let (min, max) = self.as_signed();
             if min == max {
-                write!(f, "{min}[{:?}]", self.ty)
+                write!(f, "{min}")?;
             } else {
-                write!(f, "{min}..={max}[{:?}]", self.ty)
+                write!(f, "{min}..={max}")?;
             }
         } else {
             let (min, max) = self.as_unsigned();
             if min == max {
-                write!(f, "{min}[{:?}]", self.ty)
+                write!(f, "{min}")?;
             } else {
-                write!(f, "{min}..={max}[{:?}]", self.ty)
+                write!(f, "{min}..={max}")?;
             }
         }
+
+        // add type as suffix
+        write!(
+            f,
+            "_{}{}",
+            if self.ty.is_signed() { 'i' } else { 'u' },
+            self.ty.bits()
+        )
     }
 }

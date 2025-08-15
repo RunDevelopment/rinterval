@@ -1,7 +1,7 @@
 # Arithmetic::cast_signed
 
 U8 => I8: >
-  <empty>  ->  <empty>
+  empty  ->  empty
   0  ->  0
   1  ->  1
   2  ->  2
@@ -30,7 +30,7 @@ U8 => I8: >
   253..=255  ->  -3..=-1
 
 U32 => I32: >
-  <empty>  ->  <empty>
+  empty  ->  empty
   0  ->  0
   1  ->  1
   2  ->  2
