@@ -6,7 +6,9 @@
 
 mod arithmetic;
 mod bits;
+mod boolean;
 mod iinterval;
 
 pub use arithmetic::*;
+pub use boolean::*;
 pub use iinterval::*;

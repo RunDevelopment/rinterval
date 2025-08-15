@@ -1,4 +1,4 @@
-use crate::{IInterval, IntType, IntTypeInfo, bits::Bits};
+use crate::{BoolSet, IInterval, IntType, IntTypeInfo, bits::Bits};
 
 #[derive(Debug)]
 pub enum ArithError {
@@ -2637,11 +2637,7 @@ impl Arithmetic {
             return Ok(IInterval::empty(target));
         }
         if x.ty.is_signed() == target.is_signed() && x.ty.bits() <= target.bits() {
-            return Ok(IInterval {
-                ty: target,
-                min: x.min,
-                max: x.max,
-            });
+            return Ok(x.cast_widen(target));
         }
 
         match target.info() {
@@ -2709,5 +2705,102 @@ impl Arithmetic {
                 }
             }
         }
+    }
+
+    pub fn eq(lhs: &IInterval, rhs: &IInterval) -> ArithResult<BoolSet> {
+        _ = check_same_ty(lhs, rhs)?;
+        if lhs.is_empty() || rhs.is_empty() {
+            return Ok(BoolSet::empty());
+        }
+
+        // both intervals containing only one value is a special case, because
+        // it's the only way to return always true
+        if lhs.min == lhs.max && rhs.min == rhs.max {
+            return Ok(BoolSet::constant(lhs.min == rhs.min));
+        }
+
+        // Since at least one interval has more than one value, it's always
+        // possible to get `false`.
+        let mut res = BoolSet::FALSE;
+
+        // `true` is only possible if the intervals intersect.
+        if !lhs.is_disjoint_with(rhs) {
+            res.insert(true);
+        };
+
+        Ok(res)
+    }
+    pub fn ne(lhs: &IInterval, rhs: &IInterval) -> ArithResult<BoolSet> {
+        Ok(!Self::eq(lhs, rhs)?)
+    }
+    pub fn lt(lhs: &IInterval, rhs: &IInterval) -> ArithResult<BoolSet> {
+        _ = check_same_ty(lhs, rhs)?;
+        if lhs.is_empty() || rhs.is_empty() {
+            return Ok(BoolSet::empty());
+        }
+
+        let mut res = BoolSet::empty();
+
+        if lhs.ty.is_signed() {
+            let (l_min, l_max) = lhs.as_signed();
+            let (r_min, r_max) = rhs.as_signed();
+
+            if l_min < r_max {
+                res.insert(true);
+            }
+            if r_min <= l_max {
+                res.insert(false);
+            }
+        } else {
+            let (l_min, l_max) = lhs.as_unsigned();
+            let (r_min, r_max) = rhs.as_unsigned();
+
+            if l_min < r_max {
+                res.insert(true);
+            }
+            if r_min <= l_max {
+                res.insert(false);
+            }
+        }
+
+        Ok(res)
+    }
+    pub fn le(lhs: &IInterval, rhs: &IInterval) -> ArithResult<BoolSet> {
+        _ = check_same_ty(lhs, rhs)?;
+        if lhs.is_empty() || rhs.is_empty() {
+            return Ok(BoolSet::empty());
+        }
+
+        let mut res = BoolSet::empty();
+
+        if lhs.ty.is_signed() {
+            let (l_min, l_max) = lhs.as_signed();
+            let (r_min, r_max) = rhs.as_signed();
+
+            if l_min <= r_max {
+                res.insert(true);
+            }
+            if r_min < l_max {
+                res.insert(false);
+            }
+        } else {
+            let (l_min, l_max) = lhs.as_unsigned();
+            let (r_min, r_max) = rhs.as_unsigned();
+
+            if l_min <= r_max {
+                res.insert(true);
+            }
+            if r_min < l_max {
+                res.insert(false);
+            }
+        }
+
+        Ok(res)
+    }
+    pub fn gt(lhs: &IInterval, rhs: &IInterval) -> ArithResult<BoolSet> {
+        Ok(!Self::le(lhs, rhs)?)
+    }
+    pub fn ge(lhs: &IInterval, rhs: &IInterval) -> ArithResult<BoolSet> {
+        Ok(!Self::lt(lhs, rhs)?)
     }
 }

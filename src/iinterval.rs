@@ -279,6 +279,48 @@ impl IInterval {
         Some(self.hull_unwrap(other))
     }
 
+    /// Returns the largest interval that contains all values that are both in `self` and `other`.
+    ///
+    /// The result is unspecified if the two intervals have different types.
+    pub fn intersect_unwrap(&self, other: &Self) -> Self {
+        debug_assert!(self.ty == other.ty);
+
+        if self.is_empty() || other.is_empty() {
+            return Self::empty(self.ty);
+        }
+
+        if self.ty.is_signed() {
+            let min = self.min.max(other.min);
+            let max = self.max.min(other.max);
+
+            if min <= max {
+                Self::new_signed(self.ty, min, max)
+            } else {
+                Self::empty(self.ty)
+            }
+        } else {
+            let (l_min, l_max) = self.as_unsigned();
+            let (r_min, r_max) = other.as_unsigned();
+
+            let min = l_min.max(r_min);
+            let max = l_max.min(r_max);
+            if min <= max {
+                Self::new_unsigned(self.ty, min, max)
+            } else {
+                Self::empty(self.ty)
+            }
+        }
+    }
+    /// Returns the largest interval that contains all values that are both in `self` and `other`.
+    ///
+    /// Returns `None` if the two intervals have different types.
+    pub fn intersect(&self, other: &Self) -> Option<Self> {
+        if self.ty != other.ty {
+            return None;
+        }
+        Some(self.intersect_unwrap(other))
+    }
+
     /// Returns whether all values in `self` are also contained in `other`.
     ///
     /// The result is unspecified if the two intervals have types of different
@@ -304,6 +346,19 @@ impl IInterval {
     /// Same as `is_subset_of`, but checks if `self` is a superset of `other`.
     pub fn is_superset_of(&self, other: &Self) -> bool {
         other.is_subset_of(self)
+    }
+
+    /// Returns whether the two intervals are disjoint, i.e. they do not
+    /// contain any common values.
+    ///
+    /// ## Panics
+    ///
+    /// Panics if the two intervals have different types.
+    pub fn is_disjoint_with(&self, other: &Self) -> bool {
+        assert!(self.ty == other.ty);
+
+        let intersection = self.intersect_unwrap(other);
+        intersection.is_empty()
     }
 
     pub fn to_string_untyped(&self) -> String {

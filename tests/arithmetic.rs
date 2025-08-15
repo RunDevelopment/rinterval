@@ -1,13 +1,11 @@
 use rinterval::*;
 
-mod data;
-mod snapshot;
+mod util;
 
-use data::*;
-use snapshot::*;
+use util::*;
 
 fn for_each_range<I: Int>(values: &[I], mut f: impl FnMut(IInterval, &[I])) {
-    f(IInterval::empty(I::get_type()), &[]);
+    f(IInterval::empty(I::int_type()), &[]);
 
     for &v in values {
         f(v.to_range(), &[v]);
@@ -24,10 +22,10 @@ fn for_each_range<I: Int>(values: &[I], mut f: impl FnMut(IInterval, &[I])) {
     }
 }
 
-fn test_unary<A: Int, R: Int>(
+fn test_unary<A: Int, R: Output>(
     values: &[A],
     scalar_op: impl Fn(A) -> Option<R>,
-    range_op: fn(&IInterval) -> ArithResult,
+    range_op: fn(&IInterval) -> ArithResult<R::Set>,
 ) {
     for_each_range(values, |input_range, samples| {
         let range = match range_op(&input_range) {
@@ -35,8 +33,8 @@ fn test_unary<A: Int, R: Int>(
             Err(err) => panic!("Unexpected error: {err:?} for op({input_range})"),
         };
         assert_eq!(
-            range.ty,
-            R::get_type(),
+            R::type_of(&range),
+            R::type_of_self(),
             "Invalid type for op({input_range}) => {range}",
         );
 
@@ -44,18 +42,18 @@ fn test_unary<A: Int, R: Int>(
             let scalar = scalar_op(sample);
             if let Some(scalar) = scalar {
                 assert!(
-                    Int::contains(&range, scalar),
+                    R::contains(&range, scalar),
                     "Expected op({input_range}) => {range} to contain scalar value op({sample}) => {scalar}",
                 );
             }
         }
     });
 }
-fn test_binary<A: Int, B: Int, R: Int>(
+fn test_binary<A: Int, B: Int, R: Output>(
     lhs_values: &[A],
     rhs_values: &[B],
     scalar_op: impl Fn(A, B) -> Option<R>,
-    range_op: fn(&IInterval, &IInterval) -> ArithResult,
+    range_op: fn(&IInterval, &IInterval) -> ArithResult<R::Set>,
 ) {
     for_each_range(lhs_values, |lhs_range, lhs_samples| {
         for_each_range(rhs_values, |rhs_range, rhs_samples| {
@@ -65,8 +63,8 @@ fn test_binary<A: Int, B: Int, R: Int>(
             };
 
             assert_eq!(
-                range.ty,
-                R::get_type(),
+                R::type_of(&range),
+                R::type_of_self(),
                 "Invalid type for op({lhs_range}, {rhs_range}) => {range}",
             );
 
@@ -75,7 +73,7 @@ fn test_binary<A: Int, B: Int, R: Int>(
                     let scalar = scalar_op(lhs, rhs);
                     if let Some(scalar) = scalar {
                         assert!(
-                            Int::contains(&range, scalar),
+                            R::contains(&range, scalar),
                             "Expected op({lhs_range}, {rhs_range}) => {range} to contain scalar value op({lhs}, {rhs}) => {scalar}",
                         );
                     }
@@ -139,14 +137,14 @@ macro_rules! test_binary_all {
     };
 }
 
-struct UnaryOp {
+struct UnaryOp<R> {
     name: &'static str,
-    range_op: fn(&IInterval) -> ArithResult,
+    range_op: fn(&IInterval) -> ArithResult<R>,
     support_signed: bool,
     support_unsigned: bool,
 }
-impl UnaryOp {
-    fn new(name: &'static str, range_op: fn(&IInterval) -> ArithResult) -> Self {
+impl<R: 'static> UnaryOp<R> {
+    fn new(name: &'static str, range_op: fn(&IInterval) -> ArithResult<R>) -> Self {
         Self {
             name,
             range_op,
@@ -164,7 +162,10 @@ impl UnaryOp {
         self
     }
 
-    fn snapshot(&self) {
+    fn snapshot(&self)
+    where
+        R: WithInnerType,
+    {
         let mut data = Vec::new();
         if self.support_signed {
             data.push(SNAPSHOT_RANGES_I8);
@@ -177,7 +178,10 @@ impl UnaryOp {
 
         self.snapshot_with(&data);
     }
-    fn snapshot_with(&self, inputs: &[&[IInterval]]) {
+    fn snapshot_with(&self, inputs: &[&[IInterval]])
+    where
+        R: WithInnerType,
+    {
         let mut snapshot = format!("# {}\n\n", self.name);
 
         for ranges in inputs {
@@ -196,15 +200,15 @@ impl UnaryOp {
     }
 }
 
-struct BinaryOp {
+struct BinaryOp<R> {
     name: &'static str,
-    range_op: fn(&IInterval, &IInterval) -> ArithResult,
+    range_op: fn(&IInterval, &IInterval) -> ArithResult<R>,
     support_signed: bool,
     support_unsigned: bool,
     commutative: bool,
 }
-impl BinaryOp {
-    fn new(name: &'static str, range_op: fn(&IInterval, &IInterval) -> ArithResult) -> Self {
+impl<R: 'static> BinaryOp<R> {
+    fn new(name: &'static str, range_op: fn(&IInterval, &IInterval) -> ArithResult<R>) -> Self {
         Self {
             name,
             range_op,
@@ -228,7 +232,10 @@ impl BinaryOp {
         self
     }
 
-    fn snapshot(&self) {
+    fn snapshot(&self)
+    where
+        R: WithInnerType,
+    {
         let mut data = Vec::new();
         if self.support_signed {
             data.push((SNAPSHOT_RANGES_I8, SNAPSHOT_RANGES_I8));
@@ -241,7 +248,10 @@ impl BinaryOp {
 
         self.snapshot_with(&data);
     }
-    fn snapshot_rhs_u32(&self) {
+    fn snapshot_rhs_u32(&self)
+    where
+        R: WithInnerType,
+    {
         let mut data = Vec::new();
         if self.support_signed {
             data.push((SNAPSHOT_RANGES_I8, SNAPSHOT_RANGES_U32));
@@ -254,7 +264,10 @@ impl BinaryOp {
 
         self.snapshot_with(&data);
     }
-    fn snapshot_with(&self, inputs: &[(&[IInterval], &[IInterval])]) {
+    fn snapshot_with(&self, inputs: &[(&[IInterval], &[IInterval])])
+    where
+        R: WithInnerType,
+    {
         let mut snapshot = format!("# {}\n\n", self.name);
 
         for &(lhs_ranges, rhs_ranges) in inputs {
@@ -747,7 +760,7 @@ macro_rules! test_cast_as {
     ($name:ident, $t:ty) => {
         #[test]
         fn $name() {
-            let mut op = unary!(|x| Arithmetic::cast_as(x, <$t>::get_type()));
+            let mut op = unary!(|x| Arithmetic::cast_as(x, <$t>::int_type()));
             op.name = concat!("cast_as ", stringify!($t));
             test_unary_all!(op, |x| Some(x as $t));
             op.snapshot();
@@ -769,7 +782,7 @@ macro_rules! test_case_into {
     ($name:ident, $t:ty) => {
         #[test]
         fn $name() {
-            let mut op = unary!(|x| Arithmetic::cast_into(x, <$t>::get_type()));
+            let mut op = unary!(|x| Arithmetic::cast_into(x, <$t>::int_type()));
             op.name = concat!("cast_into ", stringify!($t));
             test_unary_all!(op, |x| <$t>::try_from(x).ok());
             op.snapshot();
@@ -786,3 +799,40 @@ test_case_into!(test_cast_into_u16, u16);
 test_case_into!(test_cast_into_u32, u32);
 test_case_into!(test_cast_into_u64, u64);
 test_case_into!(test_cast_into_u128, u128);
+
+#[test]
+fn test_eq() {
+    let op = binary!(Arithmetic::eq).commutative();
+    test_binary_all!(op, |lhs, rhs| Some(lhs == rhs));
+    op.snapshot();
+}
+#[test]
+fn test_ne() {
+    let op = binary!(Arithmetic::ne).commutative();
+    test_binary_all!(op, |lhs, rhs| Some(lhs != rhs));
+    op.snapshot();
+}
+#[test]
+fn test_lt() {
+    let op = binary!(Arithmetic::lt);
+    test_binary_all!(op, |lhs, rhs| Some(lhs < rhs));
+    op.snapshot();
+}
+#[test]
+fn test_le() {
+    let op = binary!(Arithmetic::le);
+    test_binary_all!(op, |lhs, rhs| Some(lhs <= rhs));
+    op.snapshot();
+}
+#[test]
+fn test_gt() {
+    let op = binary!(Arithmetic::gt);
+    test_binary_all!(op, |lhs, rhs| Some(lhs > rhs));
+    op.snapshot();
+}
+#[test]
+fn test_ge() {
+    let op = binary!(Arithmetic::ge);
+    test_binary_all!(op, |lhs, rhs| Some(lhs >= rhs));
+    op.snapshot();
+}
