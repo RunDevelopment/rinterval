@@ -2630,4 +2630,84 @@ impl Arithmetic {
 
         Ok(result)
     }
+
+    /// Same as `cast_as`, but panics on overflow and underflow.
+    pub fn cast_into(x: &IInterval, target: IntType) -> ArithResult {
+        if x.is_empty() {
+            return Ok(IInterval::empty(target));
+        }
+        if x.ty.is_signed() == target.is_signed() && x.ty.bits() <= target.bits() {
+            return Ok(IInterval {
+                ty: target,
+                min: x.min,
+                max: x.max,
+            });
+        }
+
+        match target.info() {
+            IntTypeInfo::Signed(t_min, t_max) => {
+                if x.ty.is_signed() {
+                    let (min, max) = x.as_signed();
+
+                    if max < t_min || min > t_max {
+                        return Ok(IInterval::empty(target));
+                    }
+
+                    Ok(IInterval::new_signed(
+                        target,
+                        min.max(t_min),
+                        max.min(t_max),
+                    ))
+                } else {
+                    let (min, max) = x.as_unsigned();
+
+                    if min > t_max as u128 {
+                        return Ok(IInterval::empty(target));
+                    }
+
+                    Ok(IInterval::new_signed(
+                        target,
+                        min as i128,
+                        max.min(t_max as u128) as i128,
+                    ))
+                }
+            }
+            IntTypeInfo::Unsigned(t_max) => {
+                if x.ty.is_signed() {
+                    let (min, max) = x.as_signed();
+
+                    if t_max == u128::MAX {
+                        // this needs a special path, because we can't do t_max as i128
+                        if max < 0 {
+                            return Ok(IInterval::empty(target));
+                        }
+
+                        Ok(IInterval::new_unsigned(
+                            target,
+                            min.max(0) as u128,
+                            max as u128,
+                        ))
+                    } else {
+                        if max < 0 || min > t_max as i128 {
+                            return Ok(IInterval::empty(target));
+                        }
+
+                        Ok(IInterval::new_unsigned(
+                            target,
+                            min.max(0) as u128,
+                            max.min(t_max as i128) as u128,
+                        ))
+                    }
+                } else {
+                    let (min, max) = x.as_unsigned();
+
+                    if min > t_max {
+                        return Ok(IInterval::empty(target));
+                    }
+
+                    Ok(IInterval::new_unsigned(target, min, max.min(t_max)))
+                }
+            }
+        }
+    }
 }

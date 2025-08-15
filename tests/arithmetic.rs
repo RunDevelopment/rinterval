@@ -743,7 +743,7 @@ fn test_cast_unsigned() {
     op.snapshot();
 }
 
-macro_rules! test_case_as {
+macro_rules! test_cast_as {
     ($name:ident, $t:ty) => {
         #[test]
         fn $name() {
@@ -754,13 +754,35 @@ macro_rules! test_case_as {
         }
     };
 }
-test_case_as!(test_cast_as_i8, i8);
-test_case_as!(test_cast_as_i16, i16);
-test_case_as!(test_cast_as_i32, i32);
-test_case_as!(test_cast_as_i64, i64);
-test_case_as!(test_cast_as_i128, i128);
-test_case_as!(test_cast_as_u8, u8);
-test_case_as!(test_cast_as_u16, u16);
-test_case_as!(test_cast_as_u32, u32);
-test_case_as!(test_cast_as_u64, u64);
-test_case_as!(test_cast_as_u128, u128);
+test_cast_as!(test_cast_as_i8, i8);
+test_cast_as!(test_cast_as_i16, i16);
+test_cast_as!(test_cast_as_i32, i32);
+test_cast_as!(test_cast_as_i64, i64);
+test_cast_as!(test_cast_as_i128, i128);
+test_cast_as!(test_cast_as_u8, u8);
+test_cast_as!(test_cast_as_u16, u16);
+test_cast_as!(test_cast_as_u32, u32);
+test_cast_as!(test_cast_as_u64, u64);
+test_cast_as!(test_cast_as_u128, u128);
+
+macro_rules! test_case_into {
+    ($name:ident, $t:ty) => {
+        #[test]
+        fn $name() {
+            let mut op = unary!(|x| Arithmetic::cast_into(x, <$t>::get_type()));
+            op.name = concat!("cast_into ", stringify!($t));
+            test_unary_all!(op, |x| <$t>::try_from(x).ok());
+            op.snapshot();
+        }
+    };
+}
+test_case_into!(test_cast_into_i8, i8);
+test_case_into!(test_cast_into_i16, i16);
+test_case_into!(test_cast_into_i32, i32);
+test_case_into!(test_cast_into_i64, i64);
+test_case_into!(test_cast_into_i128, i128);
+test_case_into!(test_cast_into_u8, u8);
+test_case_into!(test_cast_into_u16, u16);
+test_case_into!(test_cast_into_u32, u32);
+test_case_into!(test_cast_into_u64, u64);
+test_case_into!(test_cast_into_u128, u128);
