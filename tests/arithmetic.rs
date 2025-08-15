@@ -573,20 +573,20 @@ fn test_max() {
 }
 
 #[test]
-fn test_and() {
-    let op = binary!(Arithmetic::and).commutative();
+fn test_bitand() {
+    let op = binary!(Arithmetic::bitand).commutative();
     test_binary_all!(op, |lhs, rhs| Some(lhs & rhs));
     op.snapshot();
 }
 #[test]
-fn test_or() {
-    let op = binary!(Arithmetic::or).commutative();
+fn test_bitor() {
+    let op = binary!(Arithmetic::bitor).commutative();
     test_binary_all!(op, |lhs, rhs| Some(lhs | rhs));
     op.snapshot();
 }
 #[test]
-fn test_xor() {
-    let op = binary!(Arithmetic::xor).commutative();
+fn test_bitxor() {
+    let op = binary!(Arithmetic::bitxor).commutative();
     test_binary_all!(op, |lhs, rhs| Some(lhs ^ rhs));
     op.snapshot();
 }

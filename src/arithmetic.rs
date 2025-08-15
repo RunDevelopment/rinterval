@@ -2045,7 +2045,7 @@ impl Arithmetic {
     }
 
     /// Bitwise AND.
-    pub fn and(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
+    pub fn bitand(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
         check_non_empty!(lhs, rhs);
 
@@ -2114,12 +2114,12 @@ impl Arithmetic {
         }
     }
     /// Bitwise OR.
-    pub fn or(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
+    pub fn bitor(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
         check_non_empty!(lhs, rhs);
 
         if ty.is_signed() {
-            Self::not(&Self::and(&Self::not(lhs)?, &Self::not(rhs)?)?)
+            Self::not(&Self::bitand(&Self::not(lhs)?, &Self::not(rhs)?)?)
         } else {
             let l_bits = Bits::from_non_empty(lhs);
             let r_bits = Bits::from_non_empty(rhs);
@@ -2144,7 +2144,7 @@ impl Arithmetic {
         }
     }
     /// Bitwise XOR.
-    pub fn xor(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
+    pub fn bitxor(lhs: &IInterval, rhs: &IInterval) -> ArithResult {
         let ty = check_same_ty(lhs, rhs)?;
         check_non_empty!(lhs, rhs);
 

@@ -1,4 +1,4 @@
-# Arithmetic::xor
+# Arithmetic::bitxor
 
 I8 x I8 => I8: >
   empty  .  empty  ->  empty
