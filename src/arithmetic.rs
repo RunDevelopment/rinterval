@@ -2110,14 +2110,7 @@ impl Arithmetic {
             }
             Ok(and(lhs, rhs))
         } else {
-            let mut r = and(lhs, rhs);
-
-            // The result can be narrowed using: a & b <= min(a, b)
-            let (_, l_max) = lhs.as_unsigned();
-            let (_, r_max) = rhs.as_unsigned();
-            r.max = (r.max as u128).min(l_max.min(r_max)) as i128;
-
-            Ok(r)
+            Ok(and(lhs, rhs))
         }
     }
     /// Bitwise OR.
